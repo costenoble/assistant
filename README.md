@@ -50,12 +50,9 @@ Ajoute ensuite (dans `.env.local` **et** dans Vercel → Settings → Environmen
 | `CRON_SECRET` | `openssl rand -hex 32` |
 | `SMTP_USER`, `SMTP_PASS` | ta boîte Hostinger : elle envoie les liens de connexion |
 
-Crée les tables :
+Les tables sont créées et mises à jour **automatiquement à chaque déploiement en production** (`scripts/migrate-on-deploy.mjs`, lancé avant le build). Rien à faire à la main.
 
-```bash
-npm install
-npm run db:migrate
-```
+> Les variables Neon sont marquées « Sensible » dans Vercel : `vercel env pull` les renvoie vides. Pour développer en local, utilise un Postgres local ou une branche Neon dédiée, et mets son URL dans `DATABASE_URL` de `.env.local`, puis `npm run db:migrate`.
 
 **Première connexion :** `npm run dev`, puis demande un lien avec ton `OWNER_EMAIL`. Sans SMTP configuré, en local, le lien s'affiche dans le terminal.
 
@@ -84,20 +81,22 @@ Plusieurs boîtes ? Ajoute des objets au tableau. Autres dossiers : `"mailboxes"
 
 ### 5. Déploiement
 
-Chaque `git push` sur `main` déploie. Quand le schéma change (`src/lib/db/schema.ts`) :
+Chaque `git push` sur `main` déploie, et applique d'abord les migrations en attente. Si une migration échoue, le déploiement échoue et l'ancienne version reste en ligne.
+
+Quand tu modifies le schéma (`src/lib/db/schema.ts`), génère la migration et commite-la :
 
 ```bash
 npm run db:generate   # écrit la migration SQL dans drizzle/
-npm run db:migrate    # l'applique à la base
 ```
 
-### 6. Synchro automatique toutes les 15 min
+Les déploiements de preview partagent la base de production et ne la modifient pas.
+
+### 6. Synchro automatique
 
 `vercel.json` déclare un cron Vercel sur `/api/cron/sync`, protégé par `CRON_SECRET`.
 
-- **Plan Pro** (nécessaire de toute façon pour un usage commercial) : rien à faire.
-- **Plan Hobby** : les crons sont limités à un passage par jour et le déploiement **échoue** avec `*/15`. Remplace par `"0 6 * * *"` en attendant.
-- 15 minutes laisse la base Neon s'endormir entre deux passages et reste dans le plan gratuit (100 h de calcul / mois). À 5 minutes, elle resterait éveillée en permanence.
+- Réglage actuel : **une fois par jour à 6 h UTC** (`0 6 * * *`), le maximum du plan Hobby.
+- **Plan Pro** (nécessaire pour un usage commercial) : passe à `*/15 * * * *`. 15 minutes laisse la base Neon s'endormir entre deux passages et reste dans son plan gratuit (100 h de calcul / mois).
 
 Bouton **↻ Synchroniser** dans la barre latérale pour forcer à la main.
 

@@ -59,7 +59,8 @@ drizzle/                     Migrations SQL (générées depuis le schéma + tri
 | Partageable vs interne | Rien d'interne dans une table lue par le portail (notes internes, mails, tâches → tables admin) | Une requête du portail ne peut pas ramener une colonne sensible par accident |
 | Projets | `draft` = privé ; tout autre statut = visible du client | Tu prépares sans que le client voie un chantier vide |
 | Priorité | Règles déterministes + raisons affichées | Compréhensible et réglable ; un LLM pourra venir *en plus* (voir roadmap) |
-| Fréquence | Vercel Cron (15 min) → `/api/cron/sync` | Tient dans le plan gratuit de Neon ; demande Vercel Pro |
+| Fréquence | Vercel Cron → `/api/cron/sync` : 1/jour sur Hobby, 15 min en Pro | 15 min tient dans le plan gratuit de Neon |
+| Migrations | Appliquées par Vercel avant le build, en production seulement | Les URLs Neon sont « sensibles » (illisibles en local) ; un échec bloque le déploiement |
 | Tests | Vitest + PGlite (Postgres en mémoire) avec les vraies migrations | Les requêtes, le trigger et le parcours de connexion sont testés sans base externe |
 | Fuseau | Toutes les dates « murales » calculées en Europe/Paris | Vercel tourne en UTC |
 
