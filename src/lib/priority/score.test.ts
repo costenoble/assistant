@@ -88,6 +88,24 @@ describe("computePriority", () => {
     expect(ignored.score).toBe(0);
   });
 
+  it("les mots-clés sont des mots entiers, accents compris", () => {
+    const reasonsOf = (title: string) => computePriority({ ...base, title }, { now: NOW }).reasons;
+    expect(reasonsOf("Rappeler Jean")).not.toContain("Mot-clé « rappel »");
+    expect(reasonsOf("Relancer le devis")).not.toContain("Mot-clé « relance »");
+    expect(reasonsOf("Rappel : facture")).toContain("Mot-clé « rappel »");
+    expect(reasonsOf("Facture impayée")).toContain("Mot-clé « impayée »");
+  });
+
+  it("un expéditeur VIP n'est pas pénalisé comme newsletter", () => {
+    const rules = [{ match_type: "from_domain", pattern: "client.fr", context: null, priority_boost: 0, action: "vip" }] as const;
+    const r = computePriority(
+      { kind: "email", status: "inbox", context: "freelance", title: "Point projet", email: { fromAddress: "info@client.fr", isBulk: true, isAnswered: false, receivedAt: h(-1) } },
+      { now: NOW, rules: [...rules] },
+    );
+    expect(r.reasons).not.toContain("Newsletter / notification automatique");
+    expect(r.score).toBeGreaterThanOrEqual(40);
+  });
+
   it("borne le score entre 0 et 100", () => {
     const r = computePriority(
       { ...base, sourcePriority: 1, dueAt: h(-100), title: "urgent", status: "inbox", createdAt: h(-200) },

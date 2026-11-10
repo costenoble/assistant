@@ -26,6 +26,8 @@ interface Cursor {
 
 const FLAG_REFRESH_WINDOW = 200;
 const SOURCE_MAX_BYTES = 64 * 1024;
+/** Au-delà, le reste est traité aux passages suivants (cron toutes les 5 min). */
+const MAX_FETCH_PER_RUN = 150;
 
 export interface MailSyncReport {
   account: string;
@@ -108,20 +110,28 @@ async function syncMailbox(
     const uidValidity = Number(box.uidValidity);
     const resetCursor = !cursor || cursor.uidValidity !== uidValidity;
 
-    // 1. Quels UID récupérer ?
+    // 1. Quels UID récupérer ? (plafonnés pour tenir dans le temps d'exécution)
     let uids: number[];
+    let maxUid: number;
     if (resetCursor) {
       const since = new Date(Date.now() - ctx.initialDays * 86_400_000);
-      uids = ((await client.search({ since }, { uid: true })) || []) as number[];
+      const found = ((await client.search({ since }, { uid: true })) || []) as number[];
+      uids = found.sort((a, b) => a - b).slice(-MAX_FETCH_PER_RUN); // les plus récents
+      // Le curseur part de UIDNEXT - 1, même si la fenêtre initiale est vide :
+      // sinon la synchro suivante chercherait « 1:* » et rapatrierait toute la boîte.
+      maxUid = Math.max(0, Number(box.uidNext ?? 0) - 1);
     } else {
       const found = ((await client.search({ uid: `${cursor.lastUid + 1}:*` }, { uid: true })) || []) as number[];
-      uids = found.filter((u) => u > cursor.lastUid); // "n:*" renvoie toujours le dernier mail
+      uids = found
+        .filter((u) => u > cursor.lastUid) // "n:*" renvoie toujours le dernier mail
+        .sort((a, b) => a - b)
+        .slice(0, MAX_FETCH_PER_RUN); // les plus anciens d'abord : le curseur avance à chaque passage
+      maxUid = cursor.lastUid;
     }
 
     // 2. Récupération + parsing.
     const incoming: IncomingItem[] = [];
     const emailRows: Omit<EmailRow, "item_id">[] = [];
-    let maxUid = cursor && !resetCursor ? cursor.lastUid : 0;
 
     if (uids.length) {
       for await (const msg of client.fetch(
@@ -133,6 +143,10 @@ async function syncMailbox(
         const parsed = await toEmail(msg, ctx.account.id, ctx.mailbox, uidValidity);
         const matched = matchMailRules(ctx.rules, parsed.row.from_address, parsed.row.subject);
         const context = matched.find((r) => r.context)?.context ?? undefined;
+        // Un mail « de masse » n'est archivé d'office que si aucune de tes règles ne le concerne
+        // (un client VIP qui écrit depuis un CRM avec List-Unsubscribe doit rester visible).
+        const wanted = matched.some((r) => r.action === "vip" || r.context || r.priority_boost > 0);
+        const autoArchive = parsed.row.is_answered || (parsed.row.is_bulk && !wanted);
 
         incoming.push({
           external_id: parsed.externalId,
@@ -140,7 +154,7 @@ async function syncMailbox(
           title: parsed.row.subject || "(sans objet)",
           body: parsed.row.snippet,
           context,
-          initial_status: parsed.row.is_answered || parsed.row.is_bulk ? "archived" : "inbox",
+          initial_status: autoArchive ? "archived" : "inbox",
           metadata: { account: ctx.account.id, from: parsed.row.from_name ?? parsed.row.from_address },
         });
         emailRows.push(parsed.row);

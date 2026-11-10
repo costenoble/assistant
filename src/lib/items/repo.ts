@@ -3,6 +3,23 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ItemContext, ItemKind, ItemStatus, MailRule, PriorityLevel, Source, SourceKind } from "@/lib/db/types";
 import { computePriority } from "@/lib/priority/score";
 
+type Page<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+
+/**
+ * Lit toutes les lignes d'une requête, page par page : l'API Supabase plafonne
+ * chaque réponse (1000 lignes par défaut) sans le signaler. La requête doit
+ * avoir un ordre stable (ex. `.order("id")`).
+ */
+export async function selectAll<T>(page: (from: number, to: number) => Page<T>, size = 1000): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += size) {
+    const { data, error } = await page(from, from + size - 1);
+    if (error) throw new Error(error.message);
+    out.push(...(data ?? []));
+    if (!data || data.length < size) return out;
+  }
+}
+
 /** Récupère (ou crée) une source système : boîte mail, Microsoft, etc. */
 export async function ensureSource(
   db: SupabaseClient,
@@ -60,8 +77,9 @@ export async function upsertItems(
   // Une même source peut renvoyer deux fois le même élément dans un lot : on garde le dernier.
   incoming = [...new Map(incoming.map((c) => [c.external_id, c])).values()];
 
-  for (let i = 0; i < incoming.length; i += 200) {
-    const chunk = incoming.slice(i, i + 200);
+  // Lots de 40 : les ids Graph font ~150 caractères et partent dans l'URL (`in.(…)`).
+  for (let i = 0; i < incoming.length; i += 40) {
+    const chunk = incoming.slice(i, i + 40);
     const { data: existing, error: selErr } = await db
       .from("items")
       .select("id, external_id")
@@ -101,15 +119,11 @@ export async function upsertItems(
       updates.map(async (c) => {
         const id = known.get(c.external_id)!;
         ids.set(c.external_id, id);
-        const patch: Record<string, unknown> = {
-          title: c.title.slice(0, 500),
-          body: c.body ?? null,
-          url: c.url ?? null,
-          source_priority: c.source_priority ?? null,
-          due_at: c.due_at ?? null,
-          starts_at: c.starts_at ?? null,
-          ends_at: c.ends_at ?? null,
-        };
+        // Mise à jour partielle : un champ absent (undefined) est conservé, null l'efface.
+        const patch: Record<string, unknown> = { title: c.title.slice(0, 500) };
+        for (const field of ["body", "url", "source_priority", "due_at", "starts_at", "ends_at"] as const) {
+          if (c[field] !== undefined) patch[field] = c[field];
+        }
         if (c.metadata) patch.metadata = c.metadata;
         if (c.context) patch.context = c.context;
         if (c.status) patch.status = c.status;
@@ -173,12 +187,20 @@ function scoreRow(row: PriorityRow, rules: MailRule[], now: Date) {
  * les priorités : une échéance à J+2 devient J+0). N'écrit que ce qui change.
  */
 export async function recomputePriorities(db: SupabaseClient, ownerId: string, now = new Date()) {
-  const [{ data, error }, { data: rules }] = await Promise.all([
-    db.from("items").select(PRIORITY_COLUMNS).eq("owner_id", ownerId).not("status", "in", "(done,archived)"),
+  const [rows, { data: rules }] = await Promise.all([
+    selectAll<PriorityRow>((a, b) =>
+      db
+        .from("items")
+        .select(PRIORITY_COLUMNS)
+        .eq("owner_id", ownerId)
+        .not("status", "in", "(done,archived)")
+        .order("id")
+        .range(a, b) as unknown as Page<PriorityRow>,
+    ).catch((e: unknown) => {
+      throw new Error(`recomputePriorities : ${e instanceof Error ? e.message : String(e)}`);
+    }),
     db.from("mail_rules").select("*").eq("owner_id", ownerId),
   ]);
-  if (error) throw new Error(`recomputePriorities : ${error.message}`);
-  const rows = (data ?? []) as unknown as PriorityRow[];
 
   const changed = rows
     .map((row) => ({ row, r: scoreRow(row, (rules ?? []) as MailRule[], now) }))
@@ -200,6 +222,24 @@ export async function recomputePriorities(db: SupabaseClient, ownerId: string, n
     );
   }
   return { scanned: rows.length, updated: changed.length };
+}
+
+/**
+ * Clôt les RDV terminés depuis plus de 24 h (toutes sources) : ils n'ont plus
+ * rien à faire dans le flux ouvert. On garde la veille pour l'agenda du jour.
+ */
+export async function closePastEvents(db: SupabaseClient, ownerId: string, now = new Date()) {
+  const cutoff = new Date(now.getTime() - 24 * 3_600_000).toISOString();
+  const { data, error } = await db
+    .from("items")
+    .update({ status: "archived" })
+    .eq("owner_id", ownerId)
+    .eq("kind", "event")
+    .not("status", "in", "(done,archived)")
+    .lt("ends_at", cutoff)
+    .select("id");
+  if (error) throw new Error(`closePastEvents : ${error.message}`);
+  return data?.length ?? 0;
 }
 
 /** Recalcule un seul item (après une action utilisateur). */

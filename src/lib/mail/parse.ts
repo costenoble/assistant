@@ -2,7 +2,8 @@
  * Fonctions pures d'analyse des mails (testables sans serveur IMAP).
  */
 
-const BULK_SENDER = /^(no-?reply|ne-?pas-?repondre|notifications?|newsletter|news|info|mailer-daemon|marketing|hello)@/i;
+// Pas de info@ / hello@ / contact@ : beaucoup de petites entreprises (donc de clients) écrivent depuis ces adresses.
+const BULK_SENDER = /^(no-?reply|do-?not-?reply|ne-?pas-?repondre|notifications?|newsletters?|news|mailer-daemon|marketing)@/i;
 
 export interface HeaderBag {
   get(name: string): unknown;

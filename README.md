@@ -2,6 +2,8 @@
 
 Ton hub perso : **mails Hostinger + agenda Outlook (Semaphors) + tâches de tes SaaS + saisie rapide**, dans un seul flux trié par priorité. Objectif : ne plus rien oublier.
 
+Il devient aussi l'outil de gestion client : **fiches clients, contacts, projets et portail client** où tes clients suivent leurs projets (puis, à venir : tickets, maquettes, previews de sites testables en direct).
+
 > Next.js 16 (App Router) · Supabase (Postgres + Auth + pg_cron) · Vercel · TypeScript strict · Tailwind 4
 
 ---
@@ -16,6 +18,8 @@ Ton hub perso : **mails Hostinger + agenda Outlook (Semaphors) + tâches de tes 
 | **API SaaS** | `POST /api/ingest` avec une clé par SaaS (hashée en base), idempotent par `external_id` |
 | **Priorités** | Moteur pur et testé : échéance, retard, RDV imminent, mots-clés (« urgent », « relance », « impayé »…), mail sans réponse depuis X jours, VIP, override manuel. Chaque point affiche sa raison |
 | **Saisie rapide** | `Rappeler Jean demain 14h #semaphors !!` → tâche datée (heure de Paris), contexte, priorité |
+| **Clients** | Fiches clients (statut, site, domaines mail), contacts, projets. Un projet est en *brouillon* (privé) tant que tu ne le publies pas |
+| **Portail client** | `/portail` : chaque contact avec accès voit **uniquement** les projets publiés de son entreprise. Connexion par lien magique, accès retirable en 1 clic |
 
 ---
 
@@ -24,7 +28,7 @@ Ton hub perso : **mails Hostinger + agenda Outlook (Semaphors) + tâches de tes 
 ### 1. Supabase
 
 1. Crée un projet sur [supabase.com](https://supabase.com) (région `eu-west-3` Paris).
-2. SQL Editor → exécute `supabase/migrations/0001_init.sql`.
+2. SQL Editor → exécute `supabase/migrations/0001_init.sql` puis `0003_clients_portal.sql` (`0002` vient à l'étape 6).
 3. Authentication → Providers → Email : active **Magic Link**.
 4. Authentication → URL Configuration : ajoute `https://<ton-app>.vercel.app/auth/callback` (et `http://localhost:3000/auth/callback`).
 
@@ -36,7 +40,11 @@ cp .env.example .env.local
 
 Remplis `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `OWNER_EMAIL`, `CRON_SECRET` (`openssl rand -hex 32`).
 
-**Première connexion :** lance `npm run dev`, connecte-toi par magic link, puis copie ton UUID (Supabase → Authentication → Users) dans `OWNER_USER_ID`. Ensuite, **désactive les inscriptions** (Authentication → Sign In / Providers → « Allow new users to sign up » : off).
+**Première connexion :** lance `npm run dev`, connecte-toi par magic link, puis copie ton UUID (Supabase → Authentication → Users) dans `OWNER_USER_ID`. Ensuite, **désactive les inscriptions** (Authentication → Sign In / Providers → « Allow new users to sign up » : off). Les comptes de tes clients sont créés par l'app quand tu cliques « Ouvrir l'accès portail » sur un contact : ils n'ont pas besoin des inscriptions publiques.
+
+> 📧 **Emails de connexion des clients** : le SMTP par défaut de Supabase est limité à quelques emails par heure et sert aux tests. Avant d'ouvrir le portail à des clients, configure ton SMTP Hostinger (Authentication → Emails → SMTP Settings : `smtp.hostinger.com`, port 465) et personnalise le modèle « Magic Link » à ton nom.
+>
+> Le lien magique doit être ouvert **dans le navigateur où il a été demandé** (flux PKCE). Un client qui le demande sur son ordinateur et l'ouvre sur son téléphone verra « lien invalide » : il suffit d'en redemander un sur le même appareil.
 
 ### 3. Mails Hostinger
 
@@ -117,6 +125,8 @@ await fetch(`${process.env.COCKPIT_URL}/api/ingest`, {
 | `due_at`, `starts_at`, `ends_at` | ISO 8601 + fuseau | `2026-11-12T18:00:00+01:00` |
 | `status` | `open` `waiting` `done` `cancelled` | absent = on garde le choix de l'utilisateur |
 | `body`, `url`, `context`, `metadata` | | |
+
+Mise à jour partielle : renvoyer un `external_id` connu ne modifie que les champs présents. Un champ absent est conservé, `null` l'efface.
 
 Réponses : `200 { upserted, ids }` · `401` clé absente/invalide · `422` validation (détail dans `issues`) · 100 items max par appel.
 

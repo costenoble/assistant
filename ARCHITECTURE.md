@@ -16,8 +16,10 @@ Tout ce qui demande une action devient une ligne dans **`items`**, quelle que so
 ```
 src/
 ├─ app/
-│  ├─ (app)/                 UI protégée : Aujourd'hui, Mails, Tâches, Réglages
-│  │  └─ actions.ts          Server Actions (session utilisateur, RLS)
+│  ├─ (app)/                 UI admin : Aujourd'hui, Mails, Tâches, Clients, Réglages
+│  │  ├─ actions.ts          Server Actions (session utilisateur, RLS)
+│  │  └─ clients/            CRM : fiches, contacts, accès portail, projets
+│  ├─ portail/               Espace client (requireClient, vouvoiement)
 │  ├─ api/
 │  │  ├─ ingest/             API SaaS (clé Bearer → source)
 │  │  ├─ cron/sync/          Synchro complète (CRON_SECRET)
@@ -34,7 +36,8 @@ src/
 │  ├─ time/paris.ts          Dates en Europe/Paris quel que soit le serveur
 │  └─ sync/run.ts            Orchestrateur (connecteurs isolés les uns des autres)
 ├─ components/
-└─ proxy.ts                  Session + garde mono-utilisateur (ex-middleware)
+├─ lib/auth/                 requireOwner (admin) · requireClient (portail)
+└─ proxy.ts                  Session + aiguillage admin / portail (ex-middleware)
 supabase/migrations/         Schéma, RLS, pg_cron
 ```
 
@@ -48,6 +51,10 @@ supabase/migrations/         Schéma, RLS, pg_cron
 | Sécurité | RLS par `owner_id` pour l'UI, `service_role` uniquement côté connecteurs ; `oauth_tokens` sans policy | Une fuite de la clé anon ne donne rien ; les jetons Microsoft ne sont jamais lisibles par le navigateur |
 | Clés SaaS | sha256 en base, affichées une fois, rotation en 1 clic | Standard type GitHub/Stripe |
 | Accès | Proxy + `requireOwner()` vérifient `OWNER_EMAIL` ; inscriptions désactivées | Défense en profondeur pour une app perso exposée sur Internet |
+| Rôles | Un admin (table `admins`, remplie par l'app à la connexion de `OWNER_EMAIL`) + des contacts clients (`client_contacts.portal_access` + `user_id`) | Pas de rôle à gérer à la main ; retirer l'accès = un booléen, effet immédiat |
+| Isolation client | Toutes les tables internes : `is_admin() and owner_id = auth.uid()`. Tables partageables : lecture via `my_client_ids()` | Un client qui appelle l'API Supabase en direct avec sa session ne voit que son périmètre, et ne peut rien écrire |
+| Partageable vs interne | La RLS filtre des **lignes**, pas des colonnes : rien d'interne dans une table lisible par un client (notes internes, mails, tâches → tables admin) | Évite la fuite d'une colonne « notes » via l'API |
+| Projets | `draft` = privé ; tout autre statut = visible du client | Tu prépares sans que le client voie un chantier vide |
 | Priorité | Règles déterministes + raisons affichées | Compréhensible et réglable ; un LLM pourra venir *en plus* (voir roadmap) |
 | Fréquence | pg_cron Supabase (5 min) → `/api/cron/sync` | Vercel Hobby limite les crons à 1/jour |
 | Fuseau | Toutes les dates « murales » calculées en Europe/Paris | Vercel tourne en UTC |
@@ -71,7 +78,20 @@ Score 0-100 → `critical ≥ 70`, `high ≥ 45`, `normal ≥ 20`, sinon `low`.
 
 Ajuster : `src/lib/priority/score.ts` + tests dans `score.test.ts`.
 
-## Roadmap suggérée
+## Roadmap
+
+Vision : l'outil unique — assistant perso **et** gestion client (CRM, support, livrables).
+
+| Phase | Contenu | État |
+|---|---|---|
+| 0. Fondations | Corrections synchro, modèle admin + clients, RLS testée, portail minimal | ✅ |
+| 1. CRM | Rattachement auto des mails / items à un client (domaines), fil d'activité et notes internes par client, vue projet | |
+| 2. Tickets & support | Demandes depuis le portail, par mail ou SaaS ; fil de discussion, statuts, SLA, pièces jointes (Supabase Storage) ; dans le flux « Aujourd'hui » | |
+| 3. Livrables & previews | Maquettes versionnées (images, PDF, Figma), commentaires épinglés sur l'image, validation client ; sites testables en direct via les previews Vercel en iframe | |
+| 4. IA | Brief du matin, tri des tickets, brouillons de réponse, génération de maquettes / idées de site publiées en preview | |
+| Plus tard | Devis / factures (brancher Kompta.pro), temps passé | |
+
+Idées transverses :
 
 1. **Notifications** : push web (PWA) ou Telegram le matin (brief du jour) et 15 min avant chaque RDV.
 2. **Résumé IA des mails** : classement « demande une action / info / pub » + brouillon de réponse (Mistral sur ton serveur IA local, ou API).

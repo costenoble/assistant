@@ -55,7 +55,8 @@ export async function POST(request: NextRequest) {
         ends_at: i.ends_at,
         status: normalizeStatus(i.status),
         initial_status: "todo",
-        metadata: { ...i.metadata, source: source.slug },
+        // Absent = on garde les métadonnées existantes (ex. un simple { status: "done" }).
+        metadata: i.metadata ? { ...i.metadata, source: source.slug } : undefined,
       })),
     );
     await recomputePriorities(db, source.owner_id);

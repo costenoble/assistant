@@ -58,6 +58,11 @@ export const URGENT_KEYWORDS = [
   "incident",
 ] as const;
 
+// \b de JS ne connaît pas les lettres accentuées : on borne avec « pas une lettre/chiffre » Unicode.
+const KEYWORD_PATTERNS = new Map(
+  URGENT_KEYWORDS.map((k) => [k, new RegExp(`(?<![\\p{L}\\p{N}])${k}(?![\\p{L}\\p{N}])`, "u")]),
+);
+
 const SOURCE_PRIORITY_POINTS: Record<number, [number, string]> = {
   1: [40, "Marqué urgent par la source"],
   2: [25, "Marqué important par la source"],
@@ -176,15 +181,17 @@ export function computePriority(
     else if (delta < -HOUR) add(-100, "RDV passé");
   }
 
-  // 6. Mots-clés d'urgence (une seule fois).
+  // 6. Mots-clés d'urgence (une seule fois, mots entiers : « rappeler » ≠ « rappel »).
   const haystack = `${input.title} ${input.body ?? ""}`.toLowerCase();
-  const keyword = URGENT_KEYWORDS.find((k) => haystack.includes(k));
+  const keyword = URGENT_KEYWORDS.find((k) => KEYWORD_PATTERNS.get(k)!.test(haystack));
   if (keyword) add(15, `Mot-clé « ${keyword} »`);
 
   // 7. Spécificités mail.
   if (input.kind === "email" && input.email) {
     const e = input.email;
-    if (e.isBulk) {
+    const rules = matchMailRules(opts.rules ?? [], e.fromAddress, input.title);
+    const isVip = rules.some((r) => r.action === "vip");
+    if (e.isBulk && !isVip) {
       add(-30, "Newsletter / notification automatique");
     } else if (!e.isAnswered) {
       add(15, "Mail sans réponse");
@@ -196,7 +203,7 @@ export function computePriority(
       }
     }
 
-    for (const rule of matchMailRules(opts.rules ?? [], e.fromAddress, input.title)) {
+    for (const rule of rules) {
       if (rule.action === "ignore") {
         return { score: 0, level: "low", reasons: [`Ignoré par la règle « ${rule.pattern} »`] };
       }

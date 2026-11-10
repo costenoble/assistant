@@ -2,6 +2,7 @@ import { requireOwner } from "@/lib/auth/require-owner";
 import { getNavCounts } from "@/lib/items/queries";
 import { NavLink } from "@/components/nav-link";
 import { SyncButton } from "@/components/sync-button";
+import { signOut } from "@/app/login/actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase } = await requireOwner();
@@ -15,10 +16,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <NavLink href="/" label="Aujourd'hui" count={counts.urgentTasks} />
           <NavLink href="/inbox" label="Mails" count={counts.inbox} />
           <NavLink href="/taches" label="Tâches" />
+          <NavLink href="/clients" label="Clients" />
           <NavLink href="/reglages" label="Réglages" />
         </nav>
-        <div className="mt-auto hidden md:block">
+        <div className="mt-auto hidden space-y-2 md:block">
           <SyncButton />
+          <form action={signOut}>
+            <button className="btn-ghost w-full">Se déconnecter</button>
+          </form>
         </div>
       </aside>
       <main className="min-w-0 flex-1 p-4 md:p-8">{children}</main>

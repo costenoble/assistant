@@ -35,6 +35,8 @@ export interface Item {
   snoozed_until: string | null;
   completed_at: string | null;
   metadata: Record<string, unknown>;
+  client_id: string | null;
+  project_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -97,4 +99,63 @@ export const LEVEL_LABELS: Record<PriorityLevel, string> = {
   high: "Important",
   normal: "Normal",
   low: "Bas",
+};
+
+// ─── Clients, contacts, projets (0003_clients_portal.sql) ───────────
+
+export const CLIENT_STATUSES = ["prospect", "active", "paused", "archived"] as const;
+export const PROJECT_STATUSES = ["draft", "active", "review", "done", "archived"] as const;
+export type ClientStatus = (typeof CLIENT_STATUSES)[number];
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+
+export interface Client {
+  id: string;
+  owner_id: string;
+  name: string;
+  slug: string;
+  status: ClientStatus;
+  website: string | null;
+  email_domains: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClientContact {
+  id: string;
+  owner_id: string;
+  client_id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  job_title: string | null;
+  portal_access: boolean;
+  user_id: string | null;
+  created_at: string;
+}
+
+export interface Project {
+  id: string;
+  owner_id: string;
+  client_id: string;
+  name: string;
+  status: ProjectStatus;
+  description: string | null;
+  due_on: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const CLIENT_STATUS_LABELS: Record<ClientStatus, string> = {
+  prospect: "Prospect",
+  active: "Actif",
+  paused: "En pause",
+  archived: "Archivé",
+};
+
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  draft: "Brouillon (privé)",
+  active: "En cours",
+  review: "En validation",
+  done: "Livré",
+  archived: "Archivé",
 };
