@@ -1,6 +1,8 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { ensureSource, markSourceSynced, selectAll, upsertItems, type IncomingItem } from "@/lib/items/repo";
+import { and, eq, inArray, notInArray } from "drizzle-orm";
+import type { Db } from "@/lib/db";
+import { items } from "@/lib/db/schema";
+import { ensureSource, markSourceSynced, upsertItems, type IncomingItem } from "@/lib/items/repo";
 import { getAccessToken } from "./oauth";
 
 /**
@@ -62,11 +64,11 @@ async function graphGetAll<T>(token: string, url: string, maxPages = 10): Promis
 /** Graph renvoie des dates sans « Z » quand outlook.timezone=UTC. */
 const utc = (dt: string) => (dt.endsWith("Z") ? dt : `${dt}Z`);
 
-export async function syncMicrosoft(db: SupabaseClient, ownerId: string) {
+export async function syncMicrosoft(db: Db) {
   const token = await getAccessToken(db);
   if (!token) return { skipped: true as const };
 
-  const source = await ensureSource(db, ownerId, {
+  const source = await ensureSource(db, {
     slug: MICROSOFT_SOURCE_SLUG,
     name: "Microsoft 365 · Semaphors",
     kind: "microsoft",
@@ -123,30 +125,26 @@ export async function syncMicrosoft(db: SupabaseClient, ownerId: string) {
       metadata: { from: m.from?.emailAddress?.name ?? m.from?.emailAddress?.address ?? null, outlookFlag: true },
     }));
 
-    await upsertItems(db, ownerId, source, [...eventItems, ...taskItems]);
+    await upsertItems(db, source, [...eventItems, ...taskItems]);
 
     // Nettoyage : RDV supprimés dans Outlook et drapeaux retirés / terminés.
     const seen = new Set([...eventItems, ...taskItems].map((i) => i.external_id));
     // On ne déduit « disparu » que d'une liste lue en entier (sinon on clôturerait à tort).
-    const open = await selectAll<{ id: string; external_id: string; kind: string; starts_at: string | null }>((a, b) =>
-      db
-        .from("items")
-        .select("id, external_id, kind, starts_at")
-        .eq("source_id", source.id)
-        .not("status", "in", "(done,archived)")
-        .order("id")
-        .range(a, b),
-    );
+    const open = await db
+      .select({ id: items.id, external_id: items.external_id, kind: items.kind, starts_at: items.starts_at })
+      .from(items)
+      .where(and(eq(items.source_id, source.id), notInArray(items.status, ["done", "archived"])));
     const stale = open.filter((it) => {
-      if (seen.has(it.external_id)) return false;
+      if (it.external_id && seen.has(it.external_id)) return false;
       if (it.kind === "task") return flaggedRes.complete; // drapeau retiré ou terminé
       if (!eventsRes.complete) return false;
-      const start = it.starts_at ? Date.parse(it.starts_at) : 0;
+      const start = it.starts_at?.getTime() ?? 0;
       return start >= from.getTime() && start <= to.getTime(); // RDV dans la fenêtre mais disparu
     });
-    for (const it of stale) {
-      await db.from("items").update({ status: it.kind === "task" ? "done" : "archived" }).eq("id", it.id);
-    }
+    const staleTasks = stale.filter((it) => it.kind === "task").map((it) => it.id);
+    const staleEvents = stale.filter((it) => it.kind !== "task").map((it) => it.id);
+    if (staleTasks.length) await db.update(items).set({ status: "done" }).where(inArray(items.id, staleTasks));
+    if (staleEvents.length) await db.update(items).set({ status: "archived" }).where(inArray(items.id, staleEvents));
 
     await markSourceSynced(db, source.id, null);
     return { skipped: false as const, events: eventItems.length, flagged: taskItems.length, closed: stale.length };

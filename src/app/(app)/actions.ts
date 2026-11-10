@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireOwner } from "@/lib/auth/require-owner";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { ITEM_CONTEXTS, ITEM_STATUSES, PRIORITY_LEVELS } from "@/lib/db/types";
+import { isUniqueViolation } from "@/lib/db";
+import { items, mailRules, sources } from "@/lib/db/schema";
+import { ITEM_CONTEXTS, ITEM_STATUSES, PRIORITY_LEVELS, RULE_ACTIONS, RULE_MATCHES } from "@/lib/db/types";
 import { recomputeOne } from "@/lib/items/repo";
 import { parseQuickAdd } from "@/lib/quick-add/parse";
 import { runFullSync } from "@/lib/sync/run";
@@ -21,63 +23,64 @@ function refresh() {
 export async function quickAdd(formData: FormData) {
   const raw = z.string().trim().min(1).max(500).safeParse(formData.get("text"));
   if (!raw.success) return;
-  const { supabase, user } = await requireOwner();
+  const { db } = await requireOwner();
   const p = parseQuickAdd(raw.data);
-  const { data } = await supabase
-    .from("items")
-    .insert({
-      owner_id: user.id,
+  const [created] = await db
+    .insert(items)
+    .values({
       kind: "task",
       status: "todo",
       title: p.title,
       context: p.context ?? "perso",
       manual_priority: p.manualPriority ?? null,
-      due_at: p.dueAt?.toISOString() ?? null,
+      due_at: p.dueAt ?? null,
     })
-    .select("id")
-    .single();
-  if (data) await recomputeOne(supabase, user.id, data.id);
+    .returning({ id: items.id });
+  if (created) await recomputeOne(db, created.id);
   refresh();
 }
 
 export async function setStatus(itemId: string, status: (typeof ITEM_STATUSES)[number]) {
-  const { supabase, user } = await requireOwner();
-  await supabase.from("items").update({ status: z.enum(ITEM_STATUSES).parse(status) }).eq("id", id.parse(itemId));
-  await recomputeOne(supabase, user.id, itemId);
+  const { db } = await requireOwner();
+  await db.update(items).set({ status: z.enum(ITEM_STATUSES).parse(status) }).where(eq(items.id, id.parse(itemId)));
+  await recomputeOne(db, itemId);
   refresh();
 }
 
 export async function setPriority(itemId: string, level: (typeof PRIORITY_LEVELS)[number] | null) {
-  const { supabase, user } = await requireOwner();
-  await supabase
-    .from("items")
-    .update({ manual_priority: level === null ? null : z.enum(PRIORITY_LEVELS).parse(level) })
-    .eq("id", id.parse(itemId));
-  await recomputeOne(supabase, user.id, itemId);
+  const { db } = await requireOwner();
+  await db
+    .update(items)
+    .set({ manual_priority: level === null ? null : z.enum(PRIORITY_LEVELS).parse(level) })
+    .where(eq(items.id, id.parse(itemId)));
+  await recomputeOne(db, itemId);
   refresh();
 }
 
 export async function setContext(itemId: string, context: (typeof ITEM_CONTEXTS)[number]) {
-  const { supabase } = await requireOwner();
-  await supabase.from("items").update({ context: z.enum(ITEM_CONTEXTS).parse(context) }).eq("id", id.parse(itemId));
+  const { db } = await requireOwner();
+  await db.update(items).set({ context: z.enum(ITEM_CONTEXTS).parse(context) }).where(eq(items.id, id.parse(itemId)));
   refresh();
 }
 
 /** Reporter : demain 9h, ou lundi prochain 9h. */
 export async function snooze(itemId: string, until: "tomorrow" | "monday") {
-  const { supabase } = await requireOwner();
+  const { db } = await requireOwner();
   const p = parisParts(new Date());
   const offset = until === "tomorrow" ? 1 : ((1 - p.weekday + 7) % 7) || 7;
   const date = fromParis(p.year, p.month, p.day + offset, 9, 0);
-  await supabase.from("items").update({ snoozed_until: date.toISOString() }).eq("id", id.parse(itemId));
+  await db.update(items).set({ snoozed_until: date }).where(eq(items.id, id.parse(itemId)));
   refresh();
 }
 
-/** Un mail qui demande du travail devient une tâche (avec échéance optionnelle). */
+/** Un mail qui demande du travail devient une tâche. */
 export async function emailToTask(itemId: string) {
-  const { supabase, user } = await requireOwner();
-  await supabase.from("items").update({ kind: "task", status: "todo" }).eq("id", id.parse(itemId)).eq("kind", "email");
-  await recomputeOne(supabase, user.id, itemId);
+  const { db } = await requireOwner();
+  await db
+    .update(items)
+    .set({ kind: "task", status: "todo" })
+    .where(and(eq(items.id, id.parse(itemId)), eq(items.kind, "email")));
+  await recomputeOne(db, itemId);
   refresh();
 }
 
@@ -92,7 +95,7 @@ export async function syncNow() {
 export type CreateSourceState = { key?: string; error?: string } | null;
 
 export async function createSaasSource(_prev: CreateSourceState, formData: FormData): Promise<CreateSourceState> {
-  const { supabase, user } = await requireOwner();
+  const { db } = await requireOwner();
   const parsed = z
     .object({
       name: z.string().trim().min(2).max(60),
@@ -103,59 +106,62 @@ export async function createSaasSource(_prev: CreateSourceState, formData: FormD
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide" };
 
   const { key, hash, hint } = generateApiKey(parsed.data.slug);
-  const { error } = await supabase.from("sources").insert({
-    owner_id: user.id,
-    slug: parsed.data.slug,
-    name: parsed.data.name,
-    kind: "saas",
-    default_context: parsed.data.context,
-    api_key_hash: hash,
-    api_key_hint: hint,
-  });
-  if (error) return { error: error.code === "23505" ? "Ce slug existe déjà." : error.message };
+  try {
+    await db.insert(sources).values({
+      slug: parsed.data.slug,
+      name: parsed.data.name,
+      kind: "saas",
+      default_context: parsed.data.context,
+      api_key_hash: hash,
+      api_key_hint: hint,
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) return { error: "Ce slug existe déjà." };
+    throw err;
+  }
   refresh();
   return { key };
 }
 
 export async function rotateSourceKey(sourceId: string): Promise<string> {
-  const { supabase } = await requireOwner();
-  const { data: src } = await supabase.from("sources").select("slug").eq("id", id.parse(sourceId)).single();
+  const { db } = await requireOwner();
+  const [src] = await db.select({ slug: sources.slug }).from(sources).where(eq(sources.id, id.parse(sourceId)));
   if (!src) throw new Error("Source introuvable");
   const { key, hash, hint } = generateApiKey(src.slug);
-  await supabase.from("sources").update({ api_key_hash: hash, api_key_hint: hint }).eq("id", sourceId);
+  await db.update(sources).set({ api_key_hash: hash, api_key_hint: hint }).where(eq(sources.id, sourceId));
   refresh();
   return key;
 }
 
 export async function toggleSource(sourceId: string, active: boolean) {
-  const { supabase } = await requireOwner();
-  await supabase.from("sources").update({ active }).eq("id", id.parse(sourceId));
+  const { db } = await requireOwner();
+  await db.update(sources).set({ active: z.boolean().parse(active) }).where(eq(sources.id, id.parse(sourceId)));
   refresh();
 }
 
 export async function addMailRule(formData: FormData) {
-  const { supabase, user } = await requireOwner();
+  const { db } = await requireOwner();
   const parsed = z
     .object({
-      match_type: z.enum(["from_domain", "from_address", "subject_contains"]),
+      match_type: z.enum(RULE_MATCHES),
       pattern: z.string().trim().min(2).max(200),
       context: z.enum(ITEM_CONTEXTS).or(z.literal("")).transform((v) => v || null),
-      action: z.enum(["vip", "ignore", "none"]),
+      action: z.enum(RULE_ACTIONS),
     })
     .safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
-  await supabase.from("mail_rules").insert({ owner_id: user.id, ...parsed.data });
+  await db.insert(mailRules).values(parsed.data);
   refresh();
 }
 
 export async function deleteMailRule(ruleId: string) {
-  const { supabase } = await requireOwner();
-  await supabase.from("mail_rules").delete().eq("id", id.parse(ruleId));
+  const { db } = await requireOwner();
+  await db.delete(mailRules).where(eq(mailRules.id, id.parse(ruleId)));
   refresh();
 }
 
 export async function disconnectMs() {
-  await requireOwner();
-  await disconnectMicrosoft(createAdminClient());
+  const { db } = await requireOwner();
+  await disconnectMicrosoft(db);
   refresh();
 }

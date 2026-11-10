@@ -1,21 +1,23 @@
 import Link from "next/link";
 import { requireOwner } from "@/lib/auth/require-owner";
-import { CLIENT_STATUS_LABELS, type Client } from "@/lib/db/types";
+import { asc, sql } from "drizzle-orm";
+import { clientContacts, clients as clientsTable, projects } from "@/lib/db/schema";
+import { CLIENT_STATUS_LABELS } from "@/lib/db/types";
 import { EmptyState } from "@/components/item-row";
 import { CreateClientForm } from "./forms";
 
 export const dynamic = "force-dynamic";
 
-type Row = Client & { projects: { count: number }[]; client_contacts: { count: number }[] };
-
 export default async function ClientsPage() {
-  const { supabase } = await requireOwner();
-  const { data } = await supabase
-    .from("clients")
-    .select("*, projects(count), client_contacts(count)")
-    .order("status")
-    .order("name");
-  const clients = (data ?? []) as Row[];
+  const { db } = await requireOwner();
+  const clients = await db
+    .select({
+      client: clientsTable,
+      projectCount: sql<number>`(select count(*)::int from ${projects} where ${projects.client_id} = ${clientsTable.id})`,
+      contactCount: sql<number>`(select count(*)::int from ${clientContacts} where ${clientContacts.client_id} = ${clientsTable.id})`,
+    })
+    .from(clientsTable)
+    .orderBy(asc(clientsTable.status), asc(clientsTable.name));
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -29,7 +31,7 @@ export default async function ClientsPage() {
       <section className="card overflow-hidden">
         {clients.length ? (
           <ul className="divide-y divide-border">
-            {clients.map((c) => (
+            {clients.map(({ client: c, projectCount, contactCount }) => (
               <li key={c.id}>
                 <Link href={`/clients/${c.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-surface-2/60">
                   <div className="min-w-0">
@@ -40,8 +42,8 @@ export default async function ClientsPage() {
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3 text-xs text-muted">
-                    <span>{c.projects[0]?.count ?? 0} projet(s)</span>
-                    <span>{c.client_contacts[0]?.count ?? 0} contact(s)</span>
+                    <span>{projectCount} projet(s)</span>
+                    <span>{contactCount} contact(s)</span>
                     <span className="rounded border border-border px-1.5 py-0.5">{CLIENT_STATUS_LABELS[c.status]}</span>
                   </div>
                 </Link>

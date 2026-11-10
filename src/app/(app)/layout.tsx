@@ -5,8 +5,8 @@ import { SyncButton } from "@/components/sync-button";
 import { signOut } from "@/app/login/actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { supabase } = await requireOwner();
-  const counts = await getNavCounts(supabase);
+  const { db } = await requireOwner();
+  const counts = await getNavCounts(db);
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-7xl flex-col md:flex-row">

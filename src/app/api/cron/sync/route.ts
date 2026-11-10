@@ -25,6 +25,6 @@ async function handle(request: NextRequest) {
   }
 }
 
-// Vercel Cron appelle en GET, Supabase pg_net en POST.
+// Vercel Cron appelle en GET ; POST reste ouvert pour un déclencheur externe.
 export const GET = handle;
 export const POST = handle;

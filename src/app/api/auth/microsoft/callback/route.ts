@@ -1,12 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireOwner } from "@/lib/auth/require-owner";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { exchangeCode } from "@/lib/microsoft/oauth";
 import { syncMicrosoft } from "@/lib/microsoft/graph-sync";
-import { env } from "@/lib/env";
 
 export async function GET(request: NextRequest) {
-  await requireOwner();
+  const { db } = await requireOwner();
   const params = request.nextUrl.searchParams;
   const settings = new URL("/reglages", request.url);
 
@@ -22,9 +20,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const db = createAdminClient();
     await exchangeCode(db, code);
-    await syncMicrosoft(db, env().OWNER_USER_ID);
+    await syncMicrosoft(db);
     settings.searchParams.set("ms", "ok");
   } catch (err) {
     console.error("[microsoft callback]", err);

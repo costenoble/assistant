@@ -1,46 +1,31 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ItemContext, ItemKind, ItemStatus, MailRule, PriorityLevel, Source, SourceKind } from "@/lib/db/types";
+import { and, eq, inArray, lt, notInArray } from "drizzle-orm";
+import type { Db } from "@/lib/db";
+import { emailMessages, items, mailRules, sources } from "@/lib/db/schema";
+import type { ItemContext, ItemKind, ItemStatus, Source, SourceKind } from "@/lib/db/types";
 import { computePriority } from "@/lib/priority/score";
 
-type Page<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
-
-/**
- * Lit toutes les lignes d'une requête, page par page : l'API Supabase plafonne
- * chaque réponse (1000 lignes par défaut) sans le signaler. La requête doit
- * avoir un ordre stable (ex. `.order("id")`).
- */
-export async function selectAll<T>(page: (from: number, to: number) => Page<T>, size = 1000): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; ; from += size) {
-    const { data, error } = await page(from, from + size - 1);
-    if (error) throw new Error(error.message);
-    out.push(...(data ?? []));
-    if (!data || data.length < size) return out;
-  }
-}
+const CLOSED: ItemStatus[] = ["done", "archived"];
 
 /** Récupère (ou crée) une source système : boîte mail, Microsoft, etc. */
 export async function ensureSource(
-  db: SupabaseClient,
-  ownerId: string,
+  db: Db,
   s: { slug: string; name: string; kind: SourceKind; default_context: ItemContext },
 ): Promise<Source> {
-  const { data, error } = await db
-    .from("sources")
-    .upsert({ owner_id: ownerId, ...s }, { onConflict: "owner_id,slug", ignoreDuplicates: false })
-    .select()
-    .single();
-  if (error) throw new Error(`ensureSource(${s.slug}) : ${error.message}`);
-  return data as Source;
+  const [row] = await db
+    .insert(sources)
+    .values(s)
+    .onConflictDoUpdate({ target: sources.slug, set: { name: s.name, kind: s.kind, default_context: s.default_context } })
+    .returning();
+  if (!row) throw new Error(`ensureSource(${s.slug}) : aucune ligne renvoyée`);
+  return row;
 }
 
-export async function markSourceSynced(db: SupabaseClient, sourceId: string, error: string | null) {
-  await db
-    .from("sources")
-    .update({ last_sync_at: new Date().toISOString(), last_error: error })
-    .eq("id", sourceId);
+export async function markSourceSynced(db: Db, sourceId: string, error: string | null) {
+  await db.update(sources).set({ last_sync_at: new Date(), last_error: error }).where(eq(sources.id, sourceId));
 }
+
+type DateInput = string | Date | null;
 
 export interface IncomingItem {
   external_id: string;
@@ -50,9 +35,9 @@ export interface IncomingItem {
   body?: string | null;
   url?: string | null;
   source_priority?: number | null;
-  due_at?: string | null;
-  starts_at?: string | null;
-  ends_at?: string | null;
+  due_at?: DateInput;
+  starts_at?: DateInput;
+  ends_at?: DateInput;
   metadata?: Record<string, unknown>;
   /** Statut imposé par la source. Absent = on garde celui choisi par l'utilisateur. */
   status?: ItemStatus;
@@ -60,15 +45,28 @@ export interface IncomingItem {
   initial_status?: ItemStatus;
 }
 
+const toDate = (v: DateInput | undefined) => (v == null ? null : new Date(v));
+
+/** Égalité de valeurs de colonnes (dates comparées par instant, JSON par contenu). */
+function same(a: unknown, b: unknown): boolean {
+  if (a instanceof Date || b instanceof Date) {
+    return a instanceof Date && b instanceof Date && a.getTime() === b.getTime();
+  }
+  if (a !== null && b !== null && typeof a === "object" && typeof b === "object") {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+  return a === b;
+}
+
 /**
  * Upsert idempotent d'items venant d'une source.
  * Règle d'or : on ne réécrit JAMAIS ce que l'utilisateur a décidé
  * (statut, priorité manuelle, snooze) sauf si la source impose un statut.
+ * Mise à jour partielle : un champ absent (undefined) est conservé, null l'efface.
  * Retourne la correspondance external_id → id.
  */
 export async function upsertItems(
-  db: SupabaseClient,
-  ownerId: string,
+  db: Db,
   source: Pick<Source, "id" | "default_context">,
   incoming: IncomingItem[],
 ): Promise<Map<string, string>> {
@@ -77,91 +75,102 @@ export async function upsertItems(
   // Une même source peut renvoyer deux fois le même élément dans un lot : on garde le dernier.
   incoming = [...new Map(incoming.map((c) => [c.external_id, c])).values()];
 
-  // Lots de 40 : les ids Graph font ~150 caractères et partent dans l'URL (`in.(…)`).
-  for (let i = 0; i < incoming.length; i += 40) {
-    const chunk = incoming.slice(i, i + 40);
-    const { data: existing, error: selErr } = await db
-      .from("items")
-      .select("id, external_id")
-      .eq("source_id", source.id)
-      .in("external_id", chunk.map((c) => c.external_id));
-    if (selErr) throw new Error(`upsertItems/select : ${selErr.message}`);
+  for (let i = 0; i < incoming.length; i += 500) {
+    const chunk = incoming.slice(i, i + 500);
+    const findExisting = (externalIds: string[]) =>
+      db
+        .select()
+        .from(items)
+        .where(and(eq(items.source_id, source.id), inArray(items.external_id, externalIds)));
 
-    const known = new Map((existing ?? []).map((r) => [r.external_id as string, r.id as string]));
+    const existing = await findExisting(chunk.map((c) => c.external_id));
+    const known = new Map(existing.map((r) => [r.external_id!, r]));
 
-    const toInsert = chunk
-      .filter((c) => !known.has(c.external_id))
-      .map((c) => ({
-        owner_id: ownerId,
-        source_id: source.id,
-        external_id: c.external_id,
-        kind: c.kind,
-        context: c.context ?? source.default_context,
-        status: c.status ?? c.initial_status ?? "inbox",
-        title: c.title.slice(0, 500),
-        body: c.body ?? null,
-        url: c.url ?? null,
-        source_priority: c.source_priority ?? null,
-        due_at: c.due_at ?? null,
-        starts_at: c.starts_at ?? null,
-        ends_at: c.ends_at ?? null,
-        metadata: c.metadata ?? {},
-      }));
-
+    const toInsert = chunk.filter((c) => !known.has(c.external_id));
     if (toInsert.length) {
-      const { data, error } = await db.from("items").insert(toInsert).select("id, external_id");
-      if (error) throw new Error(`upsertItems/insert : ${error.message}`);
-      for (const r of data ?? []) ids.set(r.external_id as string, r.id as string);
+      // onConflictDoNothing : deux synchros simultanées ne font pas échouer le lot.
+      const inserted = await db
+        .insert(items)
+        .values(
+          toInsert.map((c) => ({
+            source_id: source.id,
+            external_id: c.external_id,
+            kind: c.kind,
+            context: c.context ?? source.default_context,
+            status: c.status ?? c.initial_status ?? "inbox",
+            title: c.title.slice(0, 500),
+            body: c.body ?? null,
+            url: c.url ?? null,
+            source_priority: c.source_priority ?? null,
+            due_at: toDate(c.due_at),
+            starts_at: toDate(c.starts_at),
+            ends_at: toDate(c.ends_at),
+            metadata: c.metadata ?? {},
+          })),
+        )
+        .onConflictDoNothing({ target: [items.source_id, items.external_id] })
+        .returning({ id: items.id, external_id: items.external_id });
+      for (const r of inserted) ids.set(r.external_id!, r.id);
+
+      const lost = toInsert.filter((c) => !ids.has(c.external_id)).map((c) => c.external_id);
+      if (lost.length) for (const r of await findExisting(lost)) ids.set(r.external_id!, r.id);
     }
 
-    const updates = chunk.filter((c) => known.has(c.external_id));
-    await Promise.all(
-      updates.map(async (c) => {
-        const id = known.get(c.external_id)!;
-        ids.set(c.external_id, id);
-        // Mise à jour partielle : un champ absent (undefined) est conservé, null l'efface.
-        const patch: Record<string, unknown> = { title: c.title.slice(0, 500) };
-        for (const field of ["body", "url", "source_priority", "due_at", "starts_at", "ends_at"] as const) {
-          if (c[field] !== undefined) patch[field] = c[field];
-        }
-        if (c.metadata) patch.metadata = c.metadata;
-        if (c.context) patch.context = c.context;
-        if (c.status) patch.status = c.status;
-        const { error } = await db.from("items").update(patch).eq("id", id);
-        if (error) throw new Error(`upsertItems/update : ${error.message}`);
-      }),
-    );
+    for (const c of chunk) {
+      const row = known.get(c.external_id);
+      if (!row) continue;
+      ids.set(c.external_id, row.id);
+
+      const wanted: Partial<typeof items.$inferInsert> = { title: c.title.slice(0, 500) };
+      if (c.body !== undefined) wanted.body = c.body;
+      if (c.url !== undefined) wanted.url = c.url;
+      if (c.source_priority !== undefined) wanted.source_priority = c.source_priority;
+      if (c.due_at !== undefined) wanted.due_at = toDate(c.due_at);
+      if (c.starts_at !== undefined) wanted.starts_at = toDate(c.starts_at);
+      if (c.ends_at !== undefined) wanted.ends_at = toDate(c.ends_at);
+      if (c.metadata) wanted.metadata = c.metadata;
+      if (c.context) wanted.context = c.context;
+      if (c.status) wanted.status = c.status;
+
+      // On n'écrit que ce qui a changé : une synchro sans nouveauté ne touche pas la base.
+      const patch = Object.fromEntries(
+        Object.entries(wanted).filter(([k, v]) => !same(v, row[k as keyof typeof row])),
+      );
+      if (Object.keys(patch).length) await db.update(items).set(patch).where(eq(items.id, row.id));
+    }
   }
   return ids;
 }
 
-const PRIORITY_COLUMNS =
-  "id, kind, status, context, title, body, source_priority, manual_priority, due_at, starts_at, created_at, priority_score, priority_level, priority_reasons, email_messages(from_address, is_answered, is_bulk, received_at)";
+const priorityColumns = {
+  id: items.id,
+  kind: items.kind,
+  status: items.status,
+  context: items.context,
+  title: items.title,
+  body: items.body,
+  source_priority: items.source_priority,
+  manual_priority: items.manual_priority,
+  due_at: items.due_at,
+  starts_at: items.starts_at,
+  created_at: items.created_at,
+  priority_score: items.priority_score,
+  priority_level: items.priority_level,
+  priority_reasons: items.priority_reasons,
+  email: {
+    from_address: emailMessages.from_address,
+    is_answered: emailMessages.is_answered,
+    is_bulk: emailMessages.is_bulk,
+    received_at: emailMessages.received_at,
+  },
+};
 
-// Forme d'une ligne lue avec PRIORITY_COLUMNS (Supabase renvoie l'embed en objet ou tableau).
-interface PriorityRow {
-  id: string;
-  kind: ItemKind;
-  status: ItemStatus;
-  context: ItemContext;
-  title: string;
-  body: string | null;
-  source_priority: number | null;
-  manual_priority: PriorityLevel | null;
-  due_at: string | null;
-  starts_at: string | null;
-  created_at: string;
-  priority_score: number;
-  priority_level: PriorityLevel;
-  priority_reasons: string[];
-  email_messages:
-    | { from_address: string | null; is_answered: boolean; is_bulk: boolean; received_at: string }
-    | { from_address: string | null; is_answered: boolean; is_bulk: boolean; received_at: string }[]
-    | null;
+function priorityRows(db: Db) {
+  return db.select(priorityColumns).from(items).leftJoin(emailMessages, eq(emailMessages.item_id, items.id));
 }
+type PriorityRow = Awaited<ReturnType<typeof priorityRows>>[number];
 
-function scoreRow(row: PriorityRow, rules: MailRule[], now: Date) {
-  const email = Array.isArray(row.email_messages) ? row.email_messages[0] : row.email_messages;
+function scoreRow(row: PriorityRow, rules: (typeof mailRules.$inferSelect)[], now: Date) {
   return computePriority(
     {
       kind: row.kind,
@@ -174,8 +183,13 @@ function scoreRow(row: PriorityRow, rules: MailRule[], now: Date) {
       dueAt: row.due_at,
       startsAt: row.starts_at,
       createdAt: row.created_at,
-      email: email
-        ? { fromAddress: email.from_address, isAnswered: email.is_answered, isBulk: email.is_bulk, receivedAt: email.received_at }
+      email: row.email
+        ? {
+            fromAddress: row.email.from_address,
+            isAnswered: row.email.is_answered,
+            isBulk: row.email.is_bulk,
+            receivedAt: row.email.received_at,
+          }
         : null,
     },
     { now, rules },
@@ -186,24 +200,14 @@ function scoreRow(row: PriorityRow, rules: MailRule[], now: Date) {
  * Recalcule le score de tous les items ouverts (le temps qui passe change
  * les priorités : une échéance à J+2 devient J+0). N'écrit que ce qui change.
  */
-export async function recomputePriorities(db: SupabaseClient, ownerId: string, now = new Date()) {
-  const [rows, { data: rules }] = await Promise.all([
-    selectAll<PriorityRow>((a, b) =>
-      db
-        .from("items")
-        .select(PRIORITY_COLUMNS)
-        .eq("owner_id", ownerId)
-        .not("status", "in", "(done,archived)")
-        .order("id")
-        .range(a, b) as unknown as Page<PriorityRow>,
-    ).catch((e: unknown) => {
-      throw new Error(`recomputePriorities : ${e instanceof Error ? e.message : String(e)}`);
-    }),
-    db.from("mail_rules").select("*").eq("owner_id", ownerId),
+export async function recomputePriorities(db: Db, now = new Date()) {
+  const [rows, rules] = await Promise.all([
+    priorityRows(db).where(notInArray(items.status, CLOSED)),
+    db.select().from(mailRules),
   ]);
 
   const changed = rows
-    .map((row) => ({ row, r: scoreRow(row, (rules ?? []) as MailRule[], now) }))
+    .map((row) => ({ row, r: scoreRow(row, rules, now) }))
     .filter(
       ({ row, r }) =>
         r.score !== row.priority_score ||
@@ -211,15 +215,11 @@ export async function recomputePriorities(db: SupabaseClient, ownerId: string, n
         JSON.stringify(r.reasons) !== JSON.stringify(row.priority_reasons),
     );
 
-  for (let i = 0; i < changed.length; i += 25) {
-    await Promise.all(
-      changed.slice(i, i + 25).map(({ row, r }) =>
-        db
-          .from("items")
-          .update({ priority_score: r.score, priority_level: r.level, priority_reasons: r.reasons })
-          .eq("id", row.id),
-      ),
-    );
+  for (const { row, r } of changed) {
+    await db
+      .update(items)
+      .set({ priority_score: r.score, priority_level: r.level, priority_reasons: r.reasons })
+      .where(eq(items.id, row.id));
   }
   return { scanned: rows.length, updated: changed.length };
 }
@@ -228,30 +228,26 @@ export async function recomputePriorities(db: SupabaseClient, ownerId: string, n
  * Clôt les RDV terminés depuis plus de 24 h (toutes sources) : ils n'ont plus
  * rien à faire dans le flux ouvert. On garde la veille pour l'agenda du jour.
  */
-export async function closePastEvents(db: SupabaseClient, ownerId: string, now = new Date()) {
-  const cutoff = new Date(now.getTime() - 24 * 3_600_000).toISOString();
-  const { data, error } = await db
-    .from("items")
-    .update({ status: "archived" })
-    .eq("owner_id", ownerId)
-    .eq("kind", "event")
-    .not("status", "in", "(done,archived)")
-    .lt("ends_at", cutoff)
-    .select("id");
-  if (error) throw new Error(`closePastEvents : ${error.message}`);
-  return data?.length ?? 0;
+export async function closePastEvents(db: Db, now = new Date()) {
+  const cutoff = new Date(now.getTime() - 24 * 3_600_000);
+  const closed = await db
+    .update(items)
+    .set({ status: "archived" })
+    .where(and(eq(items.kind, "event"), notInArray(items.status, CLOSED), lt(items.ends_at, cutoff)))
+    .returning({ id: items.id });
+  return closed.length;
 }
 
 /** Recalcule un seul item (après une action utilisateur). */
-export async function recomputeOne(db: SupabaseClient, ownerId: string, itemId: string) {
-  const [{ data }, { data: rules }] = await Promise.all([
-    db.from("items").select(PRIORITY_COLUMNS).eq("id", itemId).eq("owner_id", ownerId).maybeSingle(),
-    db.from("mail_rules").select("*").eq("owner_id", ownerId),
+export async function recomputeOne(db: Db, itemId: string) {
+  const [[row], rules] = await Promise.all([
+    priorityRows(db).where(eq(items.id, itemId)),
+    db.select().from(mailRules),
   ]);
-  if (!data) return;
-  const r = scoreRow(data as unknown as PriorityRow, (rules ?? []) as MailRule[], new Date());
+  if (!row) return;
+  const r = scoreRow(row, rules, new Date());
   await db
-    .from("items")
-    .update({ priority_score: r.score, priority_level: r.level, priority_reasons: r.reasons })
-    .eq("id", itemId);
+    .update(items)
+    .set({ priority_score: r.score, priority_level: r.level, priority_reasons: r.reasons })
+    .where(eq(items.id, itemId));
 }
