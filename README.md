@@ -118,6 +118,8 @@ await fetch(`${process.env.COCKPIT_URL}/api/ingest`, {
 | `status` | `open` `waiting` `done` `cancelled` | absent = on garde le choix de l'utilisateur |
 | `body`, `url`, `context`, `metadata` | | |
 
+Mise à jour partielle : renvoyer un `external_id` connu ne modifie que les champs présents. Un champ absent est conservé, `null` l'efface.
+
 Réponses : `200 { upserted, ids }` · `401` clé absente/invalide · `422` validation (détail dans `issues`) · 100 items max par appel.
 
 ---

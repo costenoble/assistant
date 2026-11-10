@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ensureSource, markSourceSynced, upsertItems, type IncomingItem } from "@/lib/items/repo";
+import { ensureSource, markSourceSynced, selectAll, upsertItems, type IncomingItem } from "@/lib/items/repo";
 import { getAccessToken } from "./oauth";
 
 /**
@@ -11,6 +11,7 @@ import { getAccessToken } from "./oauth";
  */
 const GRAPH = "https://graph.microsoft.com/v1.0";
 const TZ = "Europe/Paris";
+export const MICROSOFT_SOURCE_SLUG = "microsoft-365";
 
 interface GraphEvent {
   id: string;
@@ -41,7 +42,8 @@ interface GraphMessage {
   };
 }
 
-async function graphGetAll<T>(token: string, url: string, maxPages = 10): Promise<T[]> {
+/** Toutes les pages d'une liste Graph. `complete` = false si on s'est arrêté à maxPages. */
+async function graphGetAll<T>(token: string, url: string, maxPages = 10): Promise<{ items: T[]; complete: boolean }> {
   const out: T[] = [];
   let next: string | undefined = url;
   for (let page = 0; next && page < maxPages; page++) {
@@ -54,7 +56,7 @@ async function graphGetAll<T>(token: string, url: string, maxPages = 10): Promis
     out.push(...json.value);
     next = json["@odata.nextLink"];
   }
-  return out;
+  return { items: out, complete: !next };
 }
 
 /** Graph renvoie des dates sans « Z » quand outlook.timezone=UTC. */
@@ -65,7 +67,7 @@ export async function syncMicrosoft(db: SupabaseClient, ownerId: string) {
   if (!token) return { skipped: true as const };
 
   const source = await ensureSource(db, ownerId, {
-    slug: "microsoft-365",
+    slug: MICROSOFT_SOURCE_SLUG,
     name: "Microsoft 365 · Semaphors",
     kind: "microsoft",
     default_context: "semaphors",
@@ -75,17 +77,19 @@ export async function syncMicrosoft(db: SupabaseClient, ownerId: string) {
     const from = new Date(Date.now() - 86_400_000);
     const to = new Date(Date.now() + 14 * 86_400_000);
     const select = "id,subject,bodyPreview,webLink,isCancelled,isAllDay,showAs,start,end,location,onlineMeeting,organizer";
-    const [events, flagged] = await Promise.all([
+    const [eventsRes, flaggedRes] = await Promise.all([
       graphGetAll<GraphEvent>(
         token,
         `${GRAPH}/me/calendarView?startDateTime=${from.toISOString()}&endDateTime=${to.toISOString()}&$select=${select}&$orderby=start/dateTime&$top=100`,
       ),
       graphGetAll<GraphMessage>(
         token,
-        `${GRAPH}/me/messages?$filter=flag/flagStatus eq 'flagged'&$select=id,subject,bodyPreview,webLink,importance,receivedDateTime,from,flag&$top=50`,
-        2,
+        `${GRAPH}/me/messages?$filter=flag/flagStatus eq 'flagged'&$select=id,subject,bodyPreview,webLink,importance,receivedDateTime,from,flag&$top=100`,
+        10,
       ),
     ]);
+    const events = eventsRes.items;
+    const flagged = flaggedRes.items;
 
     const eventItems: IncomingItem[] = events.map((e) => ({
       external_id: `event:${e.id}`,
@@ -123,14 +127,20 @@ export async function syncMicrosoft(db: SupabaseClient, ownerId: string) {
 
     // Nettoyage : RDV supprimés dans Outlook et drapeaux retirés / terminés.
     const seen = new Set([...eventItems, ...taskItems].map((i) => i.external_id));
-    const { data: open } = await db
-      .from("items")
-      .select("id, external_id, kind, starts_at")
-      .eq("source_id", source.id)
-      .not("status", "in", "(done,archived)");
-    const stale = (open ?? []).filter((it) => {
+    // On ne déduit « disparu » que d'une liste lue en entier (sinon on clôturerait à tort).
+    const open = await selectAll<{ id: string; external_id: string; kind: string; starts_at: string | null }>((a, b) =>
+      db
+        .from("items")
+        .select("id, external_id, kind, starts_at")
+        .eq("source_id", source.id)
+        .not("status", "in", "(done,archived)")
+        .order("id")
+        .range(a, b),
+    );
+    const stale = open.filter((it) => {
       if (seen.has(it.external_id)) return false;
-      if (it.kind === "task") return true; // drapeau retiré ou terminé
+      if (it.kind === "task") return flaggedRes.complete; // drapeau retiré ou terminé
+      if (!eventsRes.complete) return false;
       const start = it.starts_at ? Date.parse(it.starts_at) : 0;
       return start >= from.getTime() && start <= to.getTime(); // RDV dans la fenêtre mais disparu
     });

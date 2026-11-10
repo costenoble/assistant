@@ -20,6 +20,9 @@ describe("isBulkMail", () => {
   });
   it("laisse passer un mail humain", () => {
     expect(isBulkMail(headers({}), "jean@client.fr")).toBe(false);
+    // Petites entreprises clientes : adresses génériques mais humaines.
+    expect(isBulkMail(headers({}), "info@boulangerie-martin.fr")).toBe(false);
+    expect(isBulkMail(headers({}), "hello@studio.fr")).toBe(false);
   });
 });
 
