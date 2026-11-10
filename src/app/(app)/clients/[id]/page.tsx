@@ -2,13 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { requireOwner } from "@/lib/auth/require-owner";
-import {
-  CLIENT_STATUSES,
-  CLIENT_STATUS_LABELS,
-  type Client,
-  type ClientContact,
-  type Project,
-} from "@/lib/db/types";
+import { asc, desc, eq } from "drizzle-orm";
+import { clientContacts, clients, projects as projectsTable } from "@/lib/db/schema";
+import { CLIENT_STATUSES, CLIENT_STATUS_LABELS } from "@/lib/db/types";
 import { EmptyState } from "@/components/item-row";
 import { formatDay } from "@/lib/time/paris";
 import { updateClient } from "../actions";
@@ -21,11 +17,11 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
   if (!parsedId.success) notFound();
   const clientId = parsedId.data;
 
-  const { supabase } = await requireOwner();
-  const [{ data: client }, { data: contacts }, { data: projects }] = await Promise.all([
-    supabase.from("clients").select("*").eq("id", clientId).maybeSingle<Client>(),
-    supabase.from("client_contacts").select("*").eq("client_id", clientId).order("created_at"),
-    supabase.from("projects").select("*").eq("client_id", clientId).order("created_at", { ascending: false }),
+  const { db } = await requireOwner();
+  const [[client], contacts, projects] = await Promise.all([
+    db.select().from(clients).where(eq(clients.id, clientId)),
+    db.select().from(clientContacts).where(eq(clientContacts.client_id, clientId)).orderBy(asc(clientContacts.created_at)),
+    db.select().from(projectsTable).where(eq(projectsTable.client_id, clientId)).orderBy(desc(projectsTable.created_at)),
   ]);
   if (!client) notFound();
 
@@ -55,8 +51,8 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
 
       <section className="card divide-y divide-border">
         <h2 className="section-title px-5 py-3">Contacts</h2>
-        {(contacts as ClientContact[] | null)?.length ? (
-          (contacts as ClientContact[]).map((c) => (
+        {contacts.length ? (
+          contacts.map((c) => (
             <div key={c.id} className="flex flex-wrap items-start justify-between gap-3 px-5 py-3">
               <div className="space-y-0.5">
                 <p className="font-medium">
@@ -82,8 +78,8 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
 
       <section className="card divide-y divide-border">
         <h2 className="section-title px-5 py-3">Projets</h2>
-        {(projects as Project[] | null)?.length ? (
-          (projects as Project[]).map((p) => (
+        {projects.length ? (
+          projects.map((p) => (
             <div key={p.id} className="flex flex-wrap items-start justify-between gap-3 px-5 py-3">
               <div className="min-w-0 space-y-0.5">
                 <p className="font-medium">{p.name}</p>

@@ -1,9 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { and, eq } from "drizzle-orm";
+import { getDb } from "@/lib/db";
+import { sources } from "@/lib/db/schema";
 import { extractBearer, hashApiKey } from "@/lib/ingest/keys";
 import { ingestBodySchema, normalizePriority, normalizeStatus } from "@/lib/ingest/schema";
 import { recomputePriorities, upsertItems } from "@/lib/items/repo";
-import type { Source } from "@/lib/db/types";
 
 /**
  * POST /api/ingest
@@ -17,13 +18,11 @@ export async function POST(request: NextRequest) {
   const key = extractBearer(request.headers.get("authorization"));
   if (!key) return NextResponse.json({ error: "missing_api_key" }, { status: 401 });
 
-  const db = createAdminClient();
-  const { data: source } = await db
-    .from("sources")
-    .select("*")
-    .eq("api_key_hash", hashApiKey(key))
-    .eq("kind", "saas")
-    .maybeSingle<Source>();
+  const db = getDb();
+  const [source] = await db
+    .select()
+    .from(sources)
+    .where(and(eq(sources.api_key_hash, hashApiKey(key)), eq(sources.kind, "saas")));
   if (!source || !source.active) return NextResponse.json({ error: "invalid_api_key" }, { status: 401 });
 
   let json: unknown;
@@ -40,7 +39,6 @@ export async function POST(request: NextRequest) {
   try {
     const ids = await upsertItems(
       db,
-      source.owner_id,
       source,
       parsed.data.items.map((i) => ({
         external_id: i.external_id,
@@ -59,12 +57,12 @@ export async function POST(request: NextRequest) {
         metadata: i.metadata ? { ...i.metadata, source: source.slug } : undefined,
       })),
     );
-    await recomputePriorities(db, source.owner_id);
-    await db.from("sources").update({ last_sync_at: new Date().toISOString(), last_error: null }).eq("id", source.id);
+    await recomputePriorities(db);
+    await db.update(sources).set({ last_sync_at: new Date(), last_error: null }).where(eq(sources.id, source.id));
     return NextResponse.json({ upserted: ids.size, ids: Object.fromEntries(ids) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown_error";
-    await db.from("sources").update({ last_error: message }).eq("id", source.id);
+    await db.update(sources).set({ last_error: message }).where(eq(sources.id, source.id));
     return NextResponse.json({ error: "ingest_failed" }, { status: 500 });
   }
 }

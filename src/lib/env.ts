@@ -7,13 +7,21 @@ import { z } from "zod";
  * que l'app démarre même si un connecteur n'est pas encore configuré.
  */
 const coreSchema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: z.url(),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(20),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
+  // URL « pooled » de Neon (ajoutée par l'intégration Vercel).
+  DATABASE_URL: z.string().startsWith("postgres"),
+  // Signe les sessions : `openssl rand -base64 32`.
+  BETTER_AUTH_SECRET: z.string().min(32),
   OWNER_EMAIL: z.email(),
-  OWNER_USER_ID: z.uuid(),
   NEXT_PUBLIC_APP_URL: z.url(),
   CRON_SECRET: z.string().min(16),
+});
+
+const smtpSchema = z.object({
+  SMTP_HOST: z.string().default("smtp.hostinger.com"),
+  SMTP_PORT: z.coerce.number().int().default(465),
+  SMTP_USER: z.string().min(3),
+  SMTP_PASS: z.string().min(1),
+  MAIL_FROM: z.string().optional(),
 });
 
 export const mailAccountSchema = z.object({
@@ -53,5 +61,11 @@ export function mailInitialSyncDays(): number {
 /** null si Microsoft 365 n'est pas configuré. */
 export function microsoftConfig() {
   const parsed = microsoftSchema.safeParse(process.env);
+  return parsed.success ? parsed.data : null;
+}
+
+/** null si l'envoi d'emails (liens de connexion) n'est pas configuré. */
+export function smtpConfig() {
+  const parsed = smtpSchema.safeParse(process.env);
   return parsed.success ? parsed.data : null;
 }

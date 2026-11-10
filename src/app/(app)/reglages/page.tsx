@@ -1,6 +1,7 @@
 import { requireOwner } from "@/lib/auth/require-owner";
 import { getSources } from "@/lib/items/queries";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { mailRules } from "@/lib/db/schema";
+import { getMicrosoftAccount } from "@/lib/microsoft/oauth";
 import { env, mailAccounts, microsoftConfig } from "@/lib/env";
 import { addMailRule } from "../actions";
 import { CreateSourceForm } from "./create-source-form";
@@ -23,13 +24,12 @@ const RULE_LABELS: Record<MailRule["match_type"], string> = {
 };
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ ms?: string }> }) {
-  const { supabase } = await requireOwner();
+  const { db } = await requireOwner();
   const ms = (await searchParams).ms;
-  const [sources, { data: rules }, { data: msToken }] = await Promise.all([
-    getSources(supabase),
-    supabase.from("mail_rules").select("*").order("created_at"),
-    // oauth_tokens n'est lisible qu'en service_role : on n'en lit que l'email.
-    createAdminClient().from("oauth_tokens").select("account_email, updated_at").eq("provider", "microsoft").maybeSingle(),
+  const [sources, rules, msToken] = await Promise.all([
+    getSources(db),
+    db.select().from(mailRules).orderBy(mailRules.created_at),
+    getMicrosoftAccount(db), // jamais les jetons : seulement l'adresse du compte
   ]);
   const accounts = mailAccounts();
   const appUrl = env().NEXT_PUBLIC_APP_URL;
@@ -95,7 +95,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             VIP = remonte en priorité · Ignorer = jamais dans les urgences · le contexte classe le mail (ex. @semaphors.fr → Semaphors).
           </p>
           <ul className="divide-y divide-border rounded-lg border border-border">
-            {(rules as MailRule[] | null)?.map((r) => (
+            {rules.map((r) => (
               <li key={r.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                 <span>
                   <span className="text-muted">{RULE_LABELS[r.match_type]}</span> <code>{r.pattern}</code>
@@ -105,7 +105,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <DeleteRuleButton id={r.id} />
               </li>
             ))}
-            {!rules?.length && <li className="px-3 py-2 text-sm text-muted">Aucune règle.</li>}
+            {!rules.length && <li className="px-3 py-2 text-sm text-muted">Aucune règle.</li>}
           </ul>
           <form action={addMailRule} className="grid gap-2 sm:grid-cols-[auto_1fr_auto_auto_auto]">
             <select name="match_type" className="input" defaultValue="from_domain">

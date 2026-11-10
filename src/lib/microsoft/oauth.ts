@@ -1,5 +1,7 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { eq } from "drizzle-orm";
+import type { Db } from "@/lib/db";
+import { oauthTokens } from "@/lib/db/schema";
 import { env, microsoftConfig } from "@/lib/env";
 
 /**
@@ -60,7 +62,7 @@ async function tokenRequest(params: Record<string, string>): Promise<TokenRespon
   return json;
 }
 
-export async function exchangeCode(db: SupabaseClient, code: string) {
+export async function exchangeCode(db: Db, code: string) {
   const t = await tokenRequest({ grant_type: "authorization_code", code, redirect_uri: redirectUri() });
   if (!t.refresh_token) throw new Error("Pas de refresh_token : vérifie le scope offline_access.");
 
@@ -71,35 +73,47 @@ export async function exchangeCode(db: SupabaseClient, code: string) {
   await saveTokens(db, t, me.mail ?? me.userPrincipalName ?? null);
 }
 
-async function saveTokens(db: SupabaseClient, t: TokenResponse, accountEmail?: string | null) {
-  const row: Record<string, unknown> = {
-    provider: "microsoft",
+/** `accountEmail` absent (rafraîchissement) = on garde l'adresse déjà enregistrée. */
+async function saveTokens(db: Db, t: TokenResponse, accountEmail?: string | null) {
+  const fresh = {
     access_token: t.access_token,
-    expires_at: new Date(Date.now() + (t.expires_in - 60) * 1000).toISOString(),
+    expires_at: new Date(Date.now() + (t.expires_in - 60) * 1000),
     scope: t.scope ?? null,
-    updated_at: new Date().toISOString(),
+    updated_at: new Date(),
+    // Microsoft ne renvoie pas toujours un nouveau refresh_token : on garde l'ancien.
+    ...(t.refresh_token ? { refresh_token: t.refresh_token } : {}),
+    ...(accountEmail !== undefined ? { account_email: accountEmail } : {}),
   };
-  if (t.refresh_token) row.refresh_token = t.refresh_token;
-  if (accountEmail !== undefined) row.account_email = accountEmail;
-  const { error } = await db.from("oauth_tokens").upsert(row, { onConflict: "provider" });
-  if (error) throw new Error(`oauth_tokens : ${error.message}`);
+  if (t.refresh_token) {
+    await db
+      .insert(oauthTokens)
+      .values({ provider: "microsoft", ...fresh, refresh_token: t.refresh_token })
+      .onConflictDoUpdate({ target: oauthTokens.provider, set: fresh });
+  } else {
+    await db.update(oauthTokens).set(fresh).where(eq(oauthTokens.provider, "microsoft"));
+  }
 }
 
 /** Jeton d'accès valide (rafraîchi si besoin), ou null si non connecté. */
-export async function getAccessToken(db: SupabaseClient): Promise<string | null> {
-  const { data } = await db
-    .from("oauth_tokens")
-    .select("access_token, refresh_token, expires_at")
-    .eq("provider", "microsoft")
-    .maybeSingle();
+export async function getAccessToken(db: Db): Promise<string | null> {
+  const [data] = await db.select().from(oauthTokens).where(eq(oauthTokens.provider, "microsoft"));
   if (!data) return null;
-  if (Date.parse(data.expires_at) > Date.now()) return data.access_token;
+  if (data.expires_at.getTime() > Date.now()) return data.access_token;
 
   const t = await tokenRequest({ grant_type: "refresh_token", refresh_token: data.refresh_token });
   await saveTokens(db, t);
   return t.access_token;
 }
 
-export async function disconnectMicrosoft(db: SupabaseClient) {
-  await db.from("oauth_tokens").delete().eq("provider", "microsoft");
+/** Compte Microsoft connecté (sans les jetons), pour l'affichage. */
+export async function getMicrosoftAccount(db: Db) {
+  const [row] = await db
+    .select({ account_email: oauthTokens.account_email, updated_at: oauthTokens.updated_at })
+    .from(oauthTokens)
+    .where(eq(oauthTokens.provider, "microsoft"));
+  return row ?? null;
+}
+
+export async function disconnectMicrosoft(db: Db) {
+  await db.delete(oauthTokens).where(eq(oauthTokens.provider, "microsoft"));
 }

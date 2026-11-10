@@ -1,7 +1,9 @@
 import "server-only";
 import { ImapFlow, type FetchMessageObject } from "imapflow";
 import { simpleParser } from "mailparser";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { and, desc, eq, sql } from "drizzle-orm";
+import type { Db } from "@/lib/db";
+import { emailMessages, items, mailRules, syncState } from "@/lib/db/schema";
 import type { MailAccount } from "@/lib/env";
 import type { ItemContext, MailRule } from "@/lib/db/types";
 import { ensureSource, markSourceSynced, upsertItems, type IncomingItem } from "@/lib/items/repo";
@@ -38,19 +40,18 @@ export interface MailSyncReport {
 }
 
 export async function syncMailAccount(
-  db: SupabaseClient,
-  ownerId: string,
+  db: Db,
   account: MailAccount,
   opts: { initialDays: number; defaultContext?: ItemContext },
 ): Promise<MailSyncReport[]> {
-  const source = await ensureSource(db, ownerId, {
+  const source = await ensureSource(db, {
     slug: `mail-${account.id}`,
     name: `Mail · ${account.label ?? account.user}`,
     kind: "mail",
     default_context: opts.defaultContext ?? "freelance",
   });
 
-  const { data: rules } = await db.from("mail_rules").select("*").eq("owner_id", ownerId);
+  const rules = await db.select().from(mailRules);
 
   const client = new ImapFlow({
     host: account.host,
@@ -67,11 +68,10 @@ export async function syncMailAccount(
     for (const mailbox of account.mailboxes) {
       reports.push(
         await syncMailbox(db, client, {
-          ownerId,
           account,
           mailbox,
           source,
-          rules: (rules ?? []) as MailRule[],
+          rules,
           initialDays: opts.initialDays,
         }),
       );
@@ -88,10 +88,9 @@ export async function syncMailAccount(
 }
 
 async function syncMailbox(
-  db: SupabaseClient,
+  db: Db,
   client: ImapFlow,
   ctx: {
-    ownerId: string;
     account: MailAccount;
     mailbox: string;
     source: { id: string; default_context: ItemContext };
@@ -100,7 +99,7 @@ async function syncMailbox(
   },
 ): Promise<MailSyncReport> {
   const cursorKey = `imap:${ctx.account.id}:${ctx.mailbox}`;
-  const { data: state } = await db.from("sync_state").select("value").eq("key", cursorKey).maybeSingle();
+  const [state] = await db.select({ value: syncState.value }).from(syncState).where(eq(syncState.key, cursorKey));
   const cursor = (state?.value ?? null) as Cursor | null;
 
   const lock = await client.getMailboxLock(ctx.mailbox, { readOnly: true });
@@ -131,7 +130,7 @@ async function syncMailbox(
 
     // 2. Récupération + parsing.
     const incoming: IncomingItem[] = [];
-    const emailRows: Omit<EmailRow, "item_id">[] = [];
+    const emailRows: EmailDetails[] = [];
 
     if (uids.length) {
       for await (const msg of client.fetch(
@@ -162,7 +161,7 @@ async function syncMailbox(
     }
 
     // 3. Écriture des items puis des détails mail.
-    const ids = await upsertItems(db, ctx.ownerId, ctx.source, incoming);
+    const ids = await upsertItems(db, ctx.source, incoming);
     const byItem = new Map<string, EmailRow>();
     emailRows.forEach((row, i) => {
       const itemId = ids.get(incoming[i]!.external_id);
@@ -170,19 +169,33 @@ async function syncMailbox(
     });
     const rows = [...byItem.values()];
     if (rows.length) {
-      const { error } = await db.from("email_messages").upsert(rows, { onConflict: "item_id" });
-      if (error) throw new Error(`email_messages : ${error.message}`);
+      // Même mail revu (boîte recréée, déplacement) : on rafraîchit ses coordonnées IMAP et ses flags.
+      await db
+        .insert(emailMessages)
+        .values(rows)
+        .onConflictDoUpdate({
+          target: emailMessages.item_id,
+          set: {
+            mailbox: sql`excluded.mailbox`,
+            uid: sql`excluded.uid`,
+            uid_validity: sql`excluded.uid_validity`,
+            snippet: sql`excluded.snippet`,
+            is_seen: sql`excluded.is_seen`,
+            is_answered: sql`excluded.is_answered`,
+            is_bulk: sql`excluded.is_bulk`,
+          },
+        });
     }
 
     // 4. Rafraîchissement des flags récents (réponses envoyées ailleurs).
     const flagsUpdated = await refreshRecentFlags(db, client, ctx.account.id, ctx.mailbox, uidValidity);
 
     // 5. Curseur.
-    await db.from("sync_state").upsert({
-      key: cursorKey,
-      value: { uidValidity, lastUid: maxUid } satisfies Cursor,
-      updated_at: new Date().toISOString(),
-    });
+    const value = { uidValidity, lastUid: maxUid } satisfies Cursor;
+    await db
+      .insert(syncState)
+      .values({ key: cursorKey, value })
+      .onConflictDoUpdate({ target: syncState.key, set: { value, updated_at: new Date() } });
 
     return { account: ctx.account.id, mailbox: ctx.mailbox, fetched: incoming.length, flagsUpdated, resetCursor };
   } finally {
@@ -190,23 +203,8 @@ async function syncMailbox(
   }
 }
 
-interface EmailRow {
-  item_id: string;
-  account_id: string;
-  mailbox: string;
-  uid: number;
-  uid_validity: number;
-  message_id: string | null;
-  from_address: string | null;
-  from_name: string | null;
-  to_addresses: string[];
-  subject: string | null;
-  snippet: string | null;
-  received_at: string;
-  is_seen: boolean;
-  is_answered: boolean;
-  is_bulk: boolean;
-}
+type EmailRow = typeof emailMessages.$inferInsert;
+type EmailDetails = Omit<EmailRow, "item_id">;
 
 async function toEmail(msg: FetchMessageObject, accountId: string, mailbox: string, uidValidity: number) {
   const env = msg.envelope;
@@ -216,7 +214,7 @@ async function toEmail(msg: FetchMessageObject, accountId: string, mailbox: stri
   const flags = msg.flags ?? new Set<string>();
   const received = msg.internalDate ? new Date(msg.internalDate) : (env?.date ?? new Date());
 
-  const row: Omit<EmailRow, "item_id"> = {
+  const row = {
     account_id: accountId,
     mailbox,
     uid: msg.uid,
@@ -227,32 +225,41 @@ async function toEmail(msg: FetchMessageObject, accountId: string, mailbox: stri
     to_addresses: (env?.to ?? []).map((a) => a.address?.toLowerCase()).filter((a): a is string => !!a),
     subject: env?.subject ?? null,
     snippet: buildSnippet(parsed?.text),
-    received_at: new Date(received).toISOString(),
+    received_at: new Date(received),
     is_seen: flags.has("\\Seen"),
     is_answered: flags.has("\\Answered"),
     is_bulk: isBulkMail(parsed?.headers ?? null, fromAddress),
-  };
+  } satisfies EmailDetails;
   return { row, externalId: mailExternalId(accountId, mailbox, uidValidity, msg.uid, row.message_id) };
 }
 
 async function refreshRecentFlags(
-  db: SupabaseClient,
+  db: Db,
   client: ImapFlow,
   accountId: string,
   mailbox: string,
   uidValidity: number,
 ): Promise<number> {
-  const { data: recent } = await db
-    .from("email_messages")
-    .select("item_id, uid, is_seen, is_answered")
-    .eq("account_id", accountId)
-    .eq("mailbox", mailbox)
-    .eq("uid_validity", uidValidity)
-    .order("uid", { ascending: false })
+  const recent = await db
+    .select({
+      item_id: emailMessages.item_id,
+      uid: emailMessages.uid,
+      is_seen: emailMessages.is_seen,
+      is_answered: emailMessages.is_answered,
+    })
+    .from(emailMessages)
+    .where(
+      and(
+        eq(emailMessages.account_id, accountId),
+        eq(emailMessages.mailbox, mailbox),
+        eq(emailMessages.uid_validity, uidValidity),
+      ),
+    )
+    .orderBy(desc(emailMessages.uid))
     .limit(FLAG_REFRESH_WINDOW);
-  if (!recent?.length) return 0;
+  if (!recent.length) return 0;
 
-  const byUid = new Map(recent.map((r) => [Number(r.uid), r]));
+  const byUid = new Map(recent.map((r) => [r.uid, r]));
   let updated = 0;
   for await (const msg of client.fetch([...byUid.keys()], { uid: true, flags: true }, { uid: true })) {
     const row = byUid.get(msg.uid);
@@ -261,10 +268,16 @@ async function refreshRecentFlags(
     const isAnswered = msg.flags?.has("\\Answered") ?? false;
     if (isSeen === row.is_seen && isAnswered === row.is_answered) continue;
 
-    await db.from("email_messages").update({ is_seen: isSeen, is_answered: isAnswered }).eq("item_id", row.item_id);
+    await db
+      .update(emailMessages)
+      .set({ is_seen: isSeen, is_answered: isAnswered })
+      .where(eq(emailMessages.item_id, row.item_id));
     if (isAnswered && !row.is_answered) {
       // Répondu depuis le webmail → plus rien à faire, sauf si l'utilisateur l'a converti en tâche.
-      await db.from("items").update({ status: "done" }).eq("id", row.item_id).eq("kind", "email").eq("status", "inbox");
+      await db
+        .update(items)
+        .set({ status: "done" })
+        .where(and(eq(items.id, row.item_id), eq(items.kind, "email"), eq(items.status, "inbox")));
     }
     updated++;
   }
