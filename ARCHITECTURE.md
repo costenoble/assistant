@@ -1,0 +1,82 @@
+# Architecture
+
+## Principe : un seul flux
+
+Tout ce qui demande une action devient une ligne dans **`items`**, quelle que soit sa provenance. L'UI ne connaît que ce flux ; les connecteurs ne font qu'y écrire.
+
+```
+ Hostinger IMAP ──┐
+ Microsoft Graph ─┼──► connecteurs ──► items ──► moteur de priorité ──► UI
+ SaaS (ingest) ───┤      (service_role)   │        (recalcul à chaque synchro)
+ Saisie rapide ───┘                        └─ email_messages (détails mail 1-1)
+```
+
+## Arborescence
+
+```
+src/
+├─ app/
+│  ├─ (app)/                 UI protégée : Aujourd'hui, Mails, Tâches, Réglages
+│  │  └─ actions.ts          Server Actions (session utilisateur, RLS)
+│  ├─ api/
+│  │  ├─ ingest/             API SaaS (clé Bearer → source)
+│  │  ├─ cron/sync/          Synchro complète (CRON_SECRET)
+│  │  └─ auth/microsoft/     OAuth login + callback
+│  ├─ auth/callback/         Retour magic link Supabase
+│  └─ login/
+├─ lib/
+│  ├─ priority/score.ts      ★ Moteur de priorité (pur, testé)
+│  ├─ mail/                  IMAP incrémental + parsing (pur, testé)
+│  ├─ microsoft/             OAuth + synchro Graph
+│  ├─ ingest/                Schéma Zod de l'API + clés
+│  ├─ items/                 repo (upsert idempotent, recalcul) + queries (UI)
+│  ├─ quick-add/             Parseur langage naturel (testé)
+│  ├─ time/paris.ts          Dates en Europe/Paris quel que soit le serveur
+│  └─ sync/run.ts            Orchestrateur (connecteurs isolés les uns des autres)
+├─ components/
+└─ proxy.ts                  Session + garde mono-utilisateur (ex-middleware)
+supabase/migrations/         Schéma, RLS, pg_cron
+```
+
+## Décisions
+
+| Sujet | Choix | Pourquoi |
+|---|---|---|
+| Modèle | Table `items` unifiée + tables de détail | Une seule requête pour « qu'est-ce que je dois faire ? » ; chaque source garde ses champs spécifiques à côté |
+| Idempotence | `unique(source_id, external_id)` | Les connecteurs peuvent rejouer sans doublon ; un SaaS renvoie le même id pour mettre à jour |
+| Décisions utilisateur | Jamais écrasées par une synchro | Statut, priorité manuelle, report ne changent que si la source impose explicitement un statut |
+| Sécurité | RLS par `owner_id` pour l'UI, `service_role` uniquement côté connecteurs ; `oauth_tokens` sans policy | Une fuite de la clé anon ne donne rien ; les jetons Microsoft ne sont jamais lisibles par le navigateur |
+| Clés SaaS | sha256 en base, affichées une fois, rotation en 1 clic | Standard type GitHub/Stripe |
+| Accès | Proxy + `requireOwner()` vérifient `OWNER_EMAIL` ; inscriptions désactivées | Défense en profondeur pour une app perso exposée sur Internet |
+| Priorité | Règles déterministes + raisons affichées | Compréhensible et réglable ; un LLM pourra venir *en plus* (voir roadmap) |
+| Fréquence | pg_cron Supabase (5 min) → `/api/cron/sync` | Vercel Hobby limite les crons à 1/jour |
+| Fuseau | Toutes les dates « murales » calculées en Europe/Paris | Vercel tourne en UTC |
+
+## Moteur de priorité
+
+Score 0-100 → `critical ≥ 70`, `high ≥ 45`, `normal ≥ 20`, sinon `low`.
+
+| Signal | Points |
+|---|---|
+| Priorité source urgent / haute / normale | +40 / +25 / +10 |
+| En retard · échéance < 24 h · < 3 j · < 7 j | +45 · +35 · +20 · +10 |
+| RDV en cours ou < 2 h · < 24 h | +50 · +25 |
+| Mot-clé d'urgence | +15 |
+| Mail sans réponse · depuis > 1 j · > 3 j | +15 · +10 · +20 |
+| Expéditeur VIP / règle personnalisée | +25 / ±50 |
+| Newsletter | −30 |
+| En attente d'un tiers | −20 |
+| Pas trié depuis > 2 j | +10 |
+| Priorité manuelle | remplace tout |
+
+Ajuster : `src/lib/priority/score.ts` + tests dans `score.test.ts`.
+
+## Roadmap suggérée
+
+1. **Notifications** : push web (PWA) ou Telegram le matin (brief du jour) et 15 min avant chaque RDV.
+2. **Résumé IA des mails** : classement « demande une action / info / pub » + brouillon de réponse (Mistral sur ton serveur IA local, ou API).
+3. **Envoi de réponses** depuis Cockpit (SMTP Hostinger, `Mail.Send` Graph).
+4. **Microsoft To Do / Planner** (Semaphors) en plus des mails drapeautés.
+5. **Revue hebdo** : ce qui a été fait, ce qui traîne, ce qui arrive.
+6. **Recherche plein texte** (`tsvector` Postgres) sur tous les items.
+7. **Raccourcis clavier** (j/k, e = fait, s = reporter) et mode mobile PWA.

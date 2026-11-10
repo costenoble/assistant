@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+/* ─── Design tokens ─────────────────────────────────────────────── */
+:root {
+  --bg: #f6f6f4;
+  --surface: #ffffff;
+  --surface-2: #f0f0ed;
+  --border: #e3e3de;
+  --text: #1b1b19;
+  --muted: #6b6b66;
+  --accent: #3d5afe;
+  --critical: #d92d20;
+  --high: #dc6803;
+  --normal: #3d5afe;
+  --low: #98a2b3;
+  --ok: #12b76a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1012;
+    --surface: #17181b;
+    --surface-2: #1f2024;
+    --border: #2a2c31;
+    --text: #ececec;
+    --muted: #8d9099;
+    --accent: #7b8cff;
+    --critical: #f97066;
+    --high: #fdb022;
+    --normal: #7b8cff;
+    --low: #667085;
+    --ok: #32d583;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-critical: var(--critical);
+  --color-high: var(--high);
+  --color-normal: var(--normal);
+  --color-low: var(--low);
+  --color-ok: var(--ok);
+  --color-danger: var(--critical);
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .card { @apply rounded-xl border border-border bg-surface; }
+  .input {
+    @apply rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none
+      placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-surface
+      px-3 py-1.5 text-sm font-medium transition hover:bg-surface-2 disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm
+      font-medium text-white transition hover:opacity-90 disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center rounded-md px-2 py-1 text-xs font-medium text-muted
+      transition hover:bg-surface-2 hover:text-text;
+  }
+  .section-title { @apply text-xs font-semibold uppercase tracking-wider text-muted; }
+}
