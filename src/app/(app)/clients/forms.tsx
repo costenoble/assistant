@@ -6,6 +6,7 @@ import {
   addProject,
   createClientRecord,
   deleteContact,
+  deleteNote,
   setPortalAccess,
   setProjectStatus,
   type FormState,
@@ -83,6 +84,15 @@ export function DeleteContactButton({ contactId, clientId }: { contactId: string
         }
       }}
     >
+      Supprimer
+    </button>
+  );
+}
+
+export function DeleteNoteButton({ noteId, clientId }: { noteId: string; clientId: string }) {
+  const [pending, start] = useTransition();
+  return (
+    <button className="btn-ghost shrink-0" disabled={pending} onClick={() => start(() => deleteNote(noteId, clientId))}>
       Supprimer
     </button>
   );

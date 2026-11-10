@@ -7,6 +7,7 @@ import { fromParis, parisParts } from "@/lib/time/paris";
  *   → titre « Rappeler Jean », échéance demain 14:00 (Paris), contexte Semaphors, priorité haute.
  *
  * Marqueurs : #perso #freelance #semaphors #saas · ! (normal) !! (haute) !!! (urgent)
+ * Client : @cabinet-leroy (le début du nom suffit s'il est unique : @cabinet)
  * Dates : aujourd'hui, ce soir, demain, après-demain, lundi…dimanche, 12/11, « 14h », « 14h30 », « 9:15 ».
  */
 export interface QuickAddResult {
@@ -14,6 +15,8 @@ export interface QuickAddResult {
   context?: ItemContext;
   manualPriority?: PriorityLevel;
   dueAt?: Date;
+  /** Texte après « @ » : slug (ou début de slug) d'un client. */
+  clientRef?: string;
 }
 
 const DAYS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
@@ -35,6 +38,10 @@ export function parseQuickAdd(input: string, now = new Date()): QuickAddResult {
     const v = ctx[1]!.toLowerCase();
     result.context = v === "sema" ? "semaphors" : (CONTEXTS.find((c) => c === v) ?? undefined);
   }
+
+  // Client (« @slug » isolé ; une adresse mail dans le texte n'est pas concernée)
+  const client = take(/\s@([a-z0-9][a-z0-9-]{1,59})(?=\s)/i);
+  if (client) result.clientRef = client[1]!.toLowerCase();
 
   // Priorité
   const bang = take(/\s(!{1,3})(?=\s)/);

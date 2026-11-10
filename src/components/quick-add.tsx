@@ -3,7 +3,8 @@
 import { useRef, useTransition } from "react";
 import { quickAdd } from "@/app/(app)/actions";
 
-export function QuickAdd() {
+/** `clientId` : la tâche créée est rattachée d'office à ce client (fiche client). */
+export function QuickAdd({ clientId, placeholder }: { clientId?: string; placeholder?: string }) {
   const ref = useRef<HTMLFormElement>(null);
   const [pending, start] = useTransition();
   return (
@@ -17,11 +18,12 @@ export function QuickAdd() {
       }
       className="flex gap-2"
     >
+      {clientId && <input type="hidden" name="client_id" value={clientId} />}
       <input
         name="text"
         required
         autoComplete="off"
-        placeholder="Noter une chose… ex. « Rappeler Jean demain 14h #semaphors !! »"
+        placeholder={placeholder ?? "Noter une chose… ex. « Rappeler Jean demain 14h @client !! »"}
         className="input flex-1"
         aria-label="Ajout rapide"
       />

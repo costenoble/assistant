@@ -6,7 +6,8 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { isOwnerEmail, requireOwner } from "@/lib/auth/require-owner";
 import { isUniqueViolation } from "@/lib/db";
-import { clientContacts, clients, projects } from "@/lib/db/schema";
+import { clientContacts, clientNotes, clients, projects } from "@/lib/db/schema";
+import { linkItemsToClients } from "@/lib/clients/link";
 import { CLIENT_STATUSES, PROJECT_STATUSES } from "@/lib/db/types";
 import { env } from "@/lib/env";
 
@@ -63,7 +64,8 @@ export async function createClientRecord(_prev: FormState, formData: FormData): 
     if (isUniqueViolation(err)) return { error: "Un client porte déjà ce nom." };
     throw err;
   }
-  revalidatePath("/clients");
+  await linkItemsToClients(db);
+  revalidatePath("/", "layout");
   redirect(`/clients/${createdId}`);
 }
 
@@ -76,8 +78,8 @@ export async function updateClient(clientId: string, formData: FormData) {
     .update(clients)
     .set({ status: parsed.status, website: parsed.website, email_domains: parseDomains(parsed.email_domains) })
     .where(eq(clients.id, id.parse(clientId)));
-  revalidatePath(`/clients/${clientId}`);
-  revalidatePath("/clients");
+  await linkItemsToClients(db); // de nouveaux domaines peuvent rattacher des mails déjà reçus
+  revalidatePath("/", "layout");
 }
 
 // ─── Contacts ───────────────────────────────────────────────────────
@@ -100,8 +102,9 @@ export async function addContact(clientId: string, _prev: FormState, formData: F
     if (isUniqueViolation(err)) return { error: "Ce contact existe déjà pour ce client." };
     throw err;
   }
-  revalidatePath(`/clients/${clientId}`);
-  return { message: "Contact ajouté." };
+  const linked = parsed.data.email ? await linkItemsToClients(db) : 0;
+  revalidatePath("/", "layout");
+  return { message: linked ? `Contact ajouté. ${linked} mail(s) déjà reçu(s) rattaché(s) à ce client.` : "Contact ajouté." };
 }
 
 export async function deleteContact(contactId: string, clientId: string) {
@@ -130,6 +133,22 @@ export async function setPortalAccess(contactId: string, enabled: boolean): Prom
       ? `Accès ouvert. ${contact.email} peut se connecter sur ${env().NEXT_PUBLIC_APP_URL}/login (lien magique).`
       : "Accès retiré : le contact ne voit plus rien dès maintenant.",
   };
+}
+
+// ─── Notes internes ─────────────────────────────────────────────────
+
+export async function addNote(clientId: string, formData: FormData) {
+  const { db } = await requireOwner();
+  const body = z.string().trim().min(1).max(5000).safeParse(formData.get("body"));
+  if (!body.success) return;
+  await db.insert(clientNotes).values({ client_id: id.parse(clientId), body: body.data });
+  revalidatePath(`/clients/${clientId}`);
+}
+
+export async function deleteNote(noteId: string, clientId: string) {
+  const { db } = await requireOwner();
+  await db.delete(clientNotes).where(eq(clientNotes.id, id.parse(noteId)));
+  revalidatePath(`/clients/${clientId}`);
 }
 
 // ─── Projets ────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import type {
   clientContacts,
+  clientNotes,
   clients,
   emailMessages,
   items,
@@ -37,6 +38,9 @@ export type MailRule = typeof mailRules.$inferSelect;
 export type Client = typeof clients.$inferSelect;
 export type ClientContact = typeof clientContacts.$inferSelect;
 export type Project = typeof projects.$inferSelect;
+export type ClientNote = typeof clientNotes.$inferSelect;
+/** Ce qu'il faut pour proposer un client dans une liste déroulante. */
+export type ClientOption = { id: string; name: string };
 
 export type ItemWithEmail = Item & { email_messages: EmailMessage | null };
 

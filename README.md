@@ -17,8 +17,9 @@ Il devient aussi l'outil de gestion client : **fiches clients, contacts, projets
 | **Microsoft 365** | OAuth délégué, agenda Outlook J-1 → J+14, mails drapeautés → tâches (avec échéance du drapeau). RDV supprimés / drapeaux retirés → fermés automatiquement |
 | **API SaaS** | `POST /api/ingest` avec une clé par SaaS (hashée en base), idempotent par `external_id` |
 | **Priorités** | Moteur pur et testé : échéance, retard, RDV imminent, mots-clés (« urgent », « relance », « impayé »…), mail sans réponse depuis X jours, VIP, override manuel. Chaque point affiche sa raison |
-| **Saisie rapide** | `Rappeler Jean demain 14h #semaphors !!` → tâche datée (heure de Paris), contexte, priorité |
+| **Saisie rapide** | `Rappeler Jean demain 14h @cabinet-leroy !!` → tâche datée (heure de Paris), rattachée au client, priorité |
 | **Clients** | Fiches clients (statut, site, domaines mail), contacts, projets. Un projet est en *brouillon* (privé) tant que tu ne le publies pas |
+| **CRM** | Les mails sont rattachés tout seuls à leur client (adresse d'un contact, sinon domaine mail). Chaque fiche montre ce qui est à traiter pour ce client, ce qui a été clos, et des notes internes. Rattachement manuel sur chaque ligne, ou `@client` dans la saisie rapide |
 | **Portail client** | `/portail` : chaque contact avec accès voit **uniquement** les projets publiés de son entreprise. Connexion par lien magique, accès retirable en 1 clic |
 
 ---

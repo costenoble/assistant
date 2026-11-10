@@ -5,10 +5,12 @@ import { requireOwner } from "@/lib/auth/require-owner";
 import { asc, desc, eq } from "drizzle-orm";
 import { clientContacts, clients, projects as projectsTable } from "@/lib/db/schema";
 import { CLIENT_STATUSES, CLIENT_STATUS_LABELS } from "@/lib/db/types";
-import { EmptyState } from "@/components/item-row";
-import { formatDay } from "@/lib/time/paris";
-import { updateClient } from "../actions";
-import { AddContactForm, AddProjectForm, DeleteContactButton, PortalAccessToggle, ProjectStatusSelect } from "../forms";
+import { EmptyState, ItemRow } from "@/components/item-row";
+import { QuickAdd } from "@/components/quick-add";
+import { getClientActivity, getClientOptions } from "@/lib/clients/link";
+import { formatDay, relative } from "@/lib/time/paris";
+import { addNote, updateClient } from "../actions";
+import { AddContactForm, AddProjectForm, DeleteContactButton, DeleteNoteButton, PortalAccessToggle, ProjectStatusSelect } from "../forms";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +20,13 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
   const clientId = parsedId.data;
 
   const { db } = await requireOwner();
-  const [[client], contacts, projects] = await Promise.all([
+  const now = new Date();
+  const [[client], contacts, projects, activity, clientOptions] = await Promise.all([
     db.select().from(clients).where(eq(clients.id, clientId)),
     db.select().from(clientContacts).where(eq(clientContacts.client_id, clientId)).orderBy(asc(clientContacts.created_at)),
     db.select().from(projectsTable).where(eq(projectsTable.client_id, clientId)).orderBy(desc(projectsTable.created_at)),
+    getClientActivity(db, clientId),
+    getClientOptions(db),
   ]);
   if (!client) notFound();
 
@@ -46,6 +51,52 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
             className="input"
           />
           <button className="btn">Enregistrer</button>
+        </form>
+      </section>
+
+      <section className="card overflow-hidden">
+        <div className="space-y-3 border-b border-border px-5 py-3">
+          <h2 className="section-title">À traiter pour ce client</h2>
+          <QuickAdd clientId={client.id} placeholder={`Nouvelle tâche pour ${client.name}… ex. « Envoyer le devis vendredi !! »`} />
+        </div>
+        {activity.open.length ? (
+          <ul className="divide-y divide-border">
+            {activity.open.map((it) => <ItemRow key={it.id} item={it} now={now} clients={clientOptions} />)}
+          </ul>
+        ) : (
+          <EmptyState>
+            Rien en cours. Les mails venant de {client.email_domains.length ? client.email_domains.join(", ") : "ses contacts"} arrivent ici automatiquement.
+          </EmptyState>
+        )}
+        {activity.closed.length > 0 && (
+          <details className="border-t border-border">
+            <summary className="cursor-pointer px-5 py-3 text-sm text-muted">Terminé récemment ({activity.closed.length})</summary>
+            <ul className="divide-y divide-border border-t border-border">
+              {activity.closed.map((it) => (
+                <li key={it.id} className="flex items-baseline justify-between gap-3 px-5 py-2 text-sm">
+                  <span className="truncate text-muted line-through">{it.title}</span>
+                  <span className="shrink-0 text-xs text-muted">{relative(it.updated_at, now)}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </section>
+
+      <section className="card divide-y divide-border">
+        <h2 className="section-title px-5 py-3">Notes internes <span className="font-normal normal-case tracking-normal">· jamais visibles du client</span></h2>
+        {activity.notes.map((n) => (
+          <div key={n.id} className="flex items-start justify-between gap-3 px-5 py-3">
+            <div className="min-w-0 space-y-1">
+              <p className="whitespace-pre-line text-sm">{n.body}</p>
+              <p className="text-xs text-muted">{formatDay(n.created_at)}</p>
+            </div>
+            <DeleteNoteButton noteId={n.id} clientId={client.id} />
+          </div>
+        ))}
+        <form action={addNote.bind(null, client.id)} className="flex gap-2 px-5 py-4">
+          <input name="body" required autoComplete="off" placeholder="Ajouter une note… ex. « Préfère être appelée le matin »" className="input flex-1" aria-label="Nouvelle note" />
+          <button className="btn">Noter</button>
         </form>
       </section>
 

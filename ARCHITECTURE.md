@@ -37,6 +37,7 @@ src/
 │  └─ sync/run.ts            Orchestrateur (connecteurs isolés les uns des autres)
 ├─ components/
 │  ├─ db/                    Schéma Drizzle, connexion, types
+│  ├─ clients/               Rattachement des items aux clients, activité d'un client
 │  └─ auth/                  Better Auth · requireOwner · requireClient · access (périmètre client)
 └─ proxy.ts                  Premier filtre : pas de cookie de session → /login
 drizzle/                     Migrations SQL (générées depuis le schéma + triggers)
@@ -57,6 +58,7 @@ drizzle/                     Migrations SQL (générées depuis le schéma + tri
 | Mono-admin | Pas de colonne `owner_id` | Un seul admin : la colonne n'apportait plus rien sans RLS |
 | Clés SaaS | sha256 en base, affichées une fois, rotation en 1 clic | Standard type GitHub/Stripe |
 | Partageable vs interne | Rien d'interne dans une table lue par le portail (notes internes, mails, tâches → tables admin) | Une requête du portail ne peut pas ramener une colonne sensible par accident |
+| Rattachement client | `linkItemsToClients` après chaque synchro : contact exact, sinon domaine. Ne remplace jamais un rattachement existant | Automatique par défaut, mais ton choix manuel a toujours le dernier mot |
 | Projets | `draft` = privé ; tout autre statut = visible du client | Tu prépares sans que le client voie un chantier vide |
 | Priorité | Règles déterministes + raisons affichées | Compréhensible et réglable ; un LLM pourra venir *en plus* (voir roadmap) |
 | Fréquence | Vercel Cron → `/api/cron/sync` : 1/jour sur Hobby, 15 min en Pro | 15 min tient dans le plan gratuit de Neon |
@@ -90,7 +92,7 @@ Vision : l'outil unique — assistant perso **et** gestion client (CRM, support,
 | Phase | Contenu | État |
 |---|---|---|
 | 0. Fondations | Corrections synchro, modèle admin + clients, portail minimal, passage à Neon + Better Auth | ✅ |
-| 1. CRM | Rattachement auto des mails / items à un client (domaines), fil d'activité et notes internes par client, vue projet | |
+| 1. CRM | Rattachement auto des mails à un client (contact, puis domaine), fil « à traiter » et notes internes par client, `@client` en saisie rapide | ✅ |
 | 2. Tickets & support | Demandes depuis le portail, par mail ou SaaS ; fil de discussion, statuts, SLA, pièces jointes (Vercel Blob) ; dans le flux « Aujourd'hui » | |
 | 3. Livrables & previews | Maquettes versionnées (images, PDF, Figma), commentaires épinglés sur l'image, validation client ; sites testables en direct via les previews Vercel en iframe | |
 | 4. IA | Brief du matin, tri des tickets, brouillons de réponse, génération de maquettes / idées de site publiées en preview | |

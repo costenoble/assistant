@@ -90,6 +90,18 @@ export const projects = pgTable(
   (t) => [index("projects_client_idx").on(t.client_id)],
 );
 
+/** Notes internes sur un client. Jamais lues par le portail. */
+export const clientNotes = pgTable(
+  "client_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    client_id: uuid("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    created_at: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("client_notes_client_idx").on(t.client_id)],
+);
+
 // ─── Sources et flux unifié ─────────────────────────────────────────
 
 /** Chaque provenance d'items. Pour les SaaS, `api_key_hash` = sha256 de la clé. */
