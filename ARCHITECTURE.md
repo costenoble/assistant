@@ -7,7 +7,7 @@ Tout ce qui demande une action devient une ligne dans **`items`**, quelle que so
 ```
  Hostinger IMAP ──┐
  Microsoft Graph ─┼──► connecteurs ──► items ──► moteur de priorité ──► UI
- SaaS (ingest) ───┤      (service_role)   │        (recalcul à chaque synchro)
+ SaaS (ingest) ───┤                       │        (recalcul à chaque synchro)
  Saisie rapide ───┘                        └─ email_messages (détails mail 1-1)
 ```
 
@@ -17,14 +17,14 @@ Tout ce qui demande une action devient une ligne dans **`items`**, quelle que so
 src/
 ├─ app/
 │  ├─ (app)/                 UI admin : Aujourd'hui, Mails, Tâches, Clients, Réglages
-│  │  ├─ actions.ts          Server Actions (session utilisateur, RLS)
+│  │  ├─ actions.ts          Server Actions (requireOwner)
 │  │  └─ clients/            CRM : fiches, contacts, accès portail, projets
 │  ├─ portail/               Espace client (requireClient, vouvoiement)
 │  ├─ api/
 │  │  ├─ ingest/             API SaaS (clé Bearer → source)
 │  │  ├─ cron/sync/          Synchro complète (CRON_SECRET)
+│  │  ├─ auth/[...all]/      Validation du lien magique (GET seulement)
 │  │  └─ auth/microsoft/     OAuth login + callback
-│  ├─ auth/callback/         Retour magic link Supabase
 │  └─ login/
 ├─ lib/
 │  ├─ priority/score.ts      ★ Moteur de priorité (pur, testé)
@@ -36,9 +36,10 @@ src/
 │  ├─ time/paris.ts          Dates en Europe/Paris quel que soit le serveur
 │  └─ sync/run.ts            Orchestrateur (connecteurs isolés les uns des autres)
 ├─ components/
-├─ lib/auth/                 requireOwner (admin) · requireClient (portail)
-└─ proxy.ts                  Session + aiguillage admin / portail (ex-middleware)
-supabase/migrations/         Schéma, RLS, pg_cron
+│  ├─ db/                    Schéma Drizzle, connexion, types
+│  └─ auth/                  Better Auth · requireOwner · requireClient · access (périmètre client)
+└─ proxy.ts                  Premier filtre : pas de cookie de session → /login
+drizzle/                     Migrations SQL (générées depuis le schéma + triggers)
 ```
 
 ## Décisions
@@ -48,15 +49,18 @@ supabase/migrations/         Schéma, RLS, pg_cron
 | Modèle | Table `items` unifiée + tables de détail | Une seule requête pour « qu'est-ce que je dois faire ? » ; chaque source garde ses champs spécifiques à côté |
 | Idempotence | `unique(source_id, external_id)` | Les connecteurs peuvent rejouer sans doublon ; un SaaS renvoie le même id pour mettre à jour |
 | Décisions utilisateur | Jamais écrasées par une synchro | Statut, priorité manuelle, report ne changent que si la source impose explicitement un statut |
-| Sécurité | RLS par `owner_id` pour l'UI, `service_role` uniquement côté connecteurs ; `oauth_tokens` sans policy | Une fuite de la clé anon ne donne rien ; les jetons Microsoft ne sont jamais lisibles par le navigateur |
+| Base | Postgres chez Neon, accès par Drizzle (`pg`, URL « pooled ») | Postgres standard, typé de bout en bout ; s'endort quand personne ne s'en sert |
+| Sécurité | Le navigateur ne parle **jamais** à la base : tout passe par le serveur (pages, Server Actions, routes) | Pas d'API de données exposée, donc pas de RLS à maintenir ; les jetons Microsoft ne quittent pas le serveur |
+| Connexion | Better Auth, lien magique seulement (15 min, usage unique, jeton hashé en base). Demande de lien et déconnexion via Server Actions ; seule la validation du lien est une route publique | Pas de mot de passe à gérer ; aucun point d'entrée public pour créer un compte |
+| Rôles | Admin = `OWNER_EMAIL`. Client = un `client_contacts` avec `portal_access` et le même email. Vérifié à la demande du lien, à la création du compte, puis à **chaque requête** | Rien à synchroniser entre « comptes » et « contacts » ; retirer l'accès = un booléen, effet immédiat |
+| Isolation client | Toute lecture du portail passe par `lib/auth/access.ts`, bornée aux `clientIds` renvoyés par `requireClient()` | Un seul endroit à relire et à tester (`access.test.ts`) ; une page du portail ne doit jamais interroger la base directement |
+| Mono-admin | Pas de colonne `owner_id` | Un seul admin : la colonne n'apportait plus rien sans RLS |
 | Clés SaaS | sha256 en base, affichées une fois, rotation en 1 clic | Standard type GitHub/Stripe |
-| Accès | Proxy + `requireOwner()` vérifient `OWNER_EMAIL` ; inscriptions désactivées | Défense en profondeur pour une app perso exposée sur Internet |
-| Rôles | Un admin (table `admins`, remplie par l'app à la connexion de `OWNER_EMAIL`) + des contacts clients (`client_contacts.portal_access` + `user_id`) | Pas de rôle à gérer à la main ; retirer l'accès = un booléen, effet immédiat |
-| Isolation client | Toutes les tables internes : `is_admin() and owner_id = auth.uid()`. Tables partageables : lecture via `my_client_ids()` | Un client qui appelle l'API Supabase en direct avec sa session ne voit que son périmètre, et ne peut rien écrire |
-| Partageable vs interne | La RLS filtre des **lignes**, pas des colonnes : rien d'interne dans une table lisible par un client (notes internes, mails, tâches → tables admin) | Évite la fuite d'une colonne « notes » via l'API |
+| Partageable vs interne | Rien d'interne dans une table lue par le portail (notes internes, mails, tâches → tables admin) | Une requête du portail ne peut pas ramener une colonne sensible par accident |
 | Projets | `draft` = privé ; tout autre statut = visible du client | Tu prépares sans que le client voie un chantier vide |
 | Priorité | Règles déterministes + raisons affichées | Compréhensible et réglable ; un LLM pourra venir *en plus* (voir roadmap) |
-| Fréquence | pg_cron Supabase (5 min) → `/api/cron/sync` | Vercel Hobby limite les crons à 1/jour |
+| Fréquence | Vercel Cron (15 min) → `/api/cron/sync` | Tient dans le plan gratuit de Neon ; demande Vercel Pro |
+| Tests | Vitest + PGlite (Postgres en mémoire) avec les vraies migrations | Les requêtes, le trigger et le parcours de connexion sont testés sans base externe |
 | Fuseau | Toutes les dates « murales » calculées en Europe/Paris | Vercel tourne en UTC |
 
 ## Moteur de priorité
@@ -84,9 +88,9 @@ Vision : l'outil unique — assistant perso **et** gestion client (CRM, support,
 
 | Phase | Contenu | État |
 |---|---|---|
-| 0. Fondations | Corrections synchro, modèle admin + clients, RLS testée, portail minimal | ✅ |
+| 0. Fondations | Corrections synchro, modèle admin + clients, portail minimal, passage à Neon + Better Auth | ✅ |
 | 1. CRM | Rattachement auto des mails / items à un client (domaines), fil d'activité et notes internes par client, vue projet | |
-| 2. Tickets & support | Demandes depuis le portail, par mail ou SaaS ; fil de discussion, statuts, SLA, pièces jointes (Supabase Storage) ; dans le flux « Aujourd'hui » | |
+| 2. Tickets & support | Demandes depuis le portail, par mail ou SaaS ; fil de discussion, statuts, SLA, pièces jointes (Vercel Blob) ; dans le flux « Aujourd'hui » | |
 | 3. Livrables & previews | Maquettes versionnées (images, PDF, Figma), commentaires épinglés sur l'image, validation client ; sites testables en direct via les previews Vercel en iframe | |
 | 4. IA | Brief du matin, tri des tickets, brouillons de réponse, génération de maquettes / idées de site publiées en preview | |
 | Plus tard | Devis / factures (brancher Kompta.pro), temps passé | |

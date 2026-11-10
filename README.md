@@ -4,7 +4,7 @@ Ton hub perso : **mails Hostinger + agenda Outlook (Semaphors) + tâches de tes 
 
 Il devient aussi l'outil de gestion client : **fiches clients, contacts, projets et portail client** où tes clients suivent leurs projets (puis, à venir : tickets, maquettes, previews de sites testables en direct).
 
-> Next.js 16 (App Router) · Supabase (Postgres + Auth + pg_cron) · Vercel · TypeScript strict · Tailwind 4
+> Next.js 16 (App Router) · Postgres (Neon) + Drizzle · Better Auth (lien magique) · Vercel · TypeScript strict · Tailwind 4
 
 ---
 
@@ -25,26 +25,41 @@ Il devient aussi l'outil de gestion client : **fiches clients, contacts, projets
 
 ## Installation (≈ 20 min)
 
-### 1. Supabase
+### 1. Vercel + base Neon
 
-1. Crée un projet sur [supabase.com](https://supabase.com) (région `eu-west-3` Paris).
-2. SQL Editor → exécute `supabase/migrations/0001_init.sql` puis `0003_clients_portal.sql` (`0002` vient à l'étape 6).
-3. Authentication → Providers → Email : active **Magic Link**.
-4. Authentication → URL Configuration : ajoute `https://<ton-app>.vercel.app/auth/callback` (et `http://localhost:3000/auth/callback`).
+1. Importe le repo dans [Vercel](https://vercel.com/new).
+2. Dans le projet : **Storage → Create Database → Neon**.
+   - Région : **Frankfurt** (la plus proche ; `vercel.json` fait tourner l'app dans la même région).
+   - **Auth : désactivé** et **Realtime : désactivé**. La connexion est gérée par l'app (Better Auth), dans ta propre base.
+   - Plan **Free**.
+3. Vercel ajoute tout seul `DATABASE_URL` et `DATABASE_URL_UNPOOLED` au projet.
 
 ### 2. Variables d'environnement
 
 ```bash
-cp .env.example .env.local
+vercel link && vercel env pull .env.local   # récupère les variables Neon
 ```
 
-Remplis `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `OWNER_EMAIL`, `CRON_SECRET` (`openssl rand -hex 32`).
+Ajoute ensuite (dans `.env.local` **et** dans Vercel → Settings → Environment Variables), en t'aidant de `.env.example` :
 
-**Première connexion :** lance `npm run dev`, connecte-toi par magic link, puis copie ton UUID (Supabase → Authentication → Users) dans `OWNER_USER_ID`. Ensuite, **désactive les inscriptions** (Authentication → Sign In / Providers → « Allow new users to sign up » : off). Les comptes de tes clients sont créés par l'app quand tu cliques « Ouvrir l'accès portail » sur un contact : ils n'ont pas besoin des inscriptions publiques.
+| Variable | Valeur |
+|---|---|
+| `OWNER_EMAIL` | ton adresse : c'est la seule qui est admin |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` en local, `https://<ton-app>.vercel.app` sur Vercel |
+| `BETTER_AUTH_SECRET` | `openssl rand -base64 32` |
+| `CRON_SECRET` | `openssl rand -hex 32` |
+| `SMTP_USER`, `SMTP_PASS` | ta boîte Hostinger : elle envoie les liens de connexion |
 
-> 📧 **Emails de connexion des clients** : le SMTP par défaut de Supabase est limité à quelques emails par heure et sert aux tests. Avant d'ouvrir le portail à des clients, configure ton SMTP Hostinger (Authentication → Emails → SMTP Settings : `smtp.hostinger.com`, port 465) et personnalise le modèle « Magic Link » à ton nom.
->
-> Le lien magique doit être ouvert **dans le navigateur où il a été demandé** (flux PKCE). Un client qui le demande sur son ordinateur et l'ouvre sur son téléphone verra « lien invalide » : il suffit d'en redemander un sur le même appareil.
+Crée les tables :
+
+```bash
+npm install
+npm run db:migrate
+```
+
+**Première connexion :** `npm run dev`, puis demande un lien avec ton `OWNER_EMAIL`. Sans SMTP configuré, en local, le lien s'affiche dans le terminal.
+
+> 🔐 **Qui peut se connecter ?** Toi (`OWNER_EMAIL`) et les contacts pour lesquels tu as cliqué « Ouvrir l'accès portail ». Personne d'autre ne peut créer de compte. Le lien est valable 15 minutes, une seule fois, et s'ouvre sur n'importe quel appareil.
 
 ### 3. Mails Hostinger
 
@@ -67,19 +82,22 @@ Plusieurs boîtes ? Ajoute des objets au tableau. Autres dossiers : `"mailboxes"
 
 > ⚠️ **Tenant Semaphors** : beaucoup de tenants bloquent le consentement utilisateur pour les apps tierces. Si tu vois « Approbation de l'administrateur requise », demande à l'admin M365 d'accorder le consentement (ou crée l'app directement dans le tenant Semaphors si tu en as les droits). Les permissions sont en lecture seule.
 
-### 5. Déploiement Vercel
+### 5. Déploiement
+
+Chaque `git push` sur `main` déploie. Quand le schéma change (`src/lib/db/schema.ts`) :
 
 ```bash
-vercel link && vercel env pull   # ou ajoute les variables dans le dashboard
-vercel --prod
+npm run db:generate   # écrit la migration SQL dans drizzle/
+npm run db:migrate    # l'applique à la base
 ```
 
-### 6. Synchro automatique toutes les 5 min
+### 6. Synchro automatique toutes les 15 min
 
-Vercel Cron en plan Hobby ne tourne **qu'une fois par jour** (`vercel.json` le garde comme filet de sécurité). Pour la fréquence, Supabase appelle l'app :
+`vercel.json` déclare un cron Vercel sur `/api/cron/sync`, protégé par `CRON_SECRET`.
 
-1. Database → Extensions : active `pg_cron` et `pg_net`.
-2. Remplace `<APP_URL>` et `<CRON_SECRET>` dans `supabase/migrations/0002_cron.sql` puis exécute-le.
+- **Plan Pro** (nécessaire de toute façon pour un usage commercial) : rien à faire.
+- **Plan Hobby** : les crons sont limités à un passage par jour et le déploiement **échoue** avec `*/15`. Remplace par `"0 6 * * *"` en attendant.
+- 15 minutes laisse la base Neon s'endormir entre deux passages et reste dans le plan gratuit (100 h de calcul / mois). À 5 minutes, elle resterait éveillée en permanence.
 
 Bouton **↻ Synchroniser** dans la barre latérale pour forcer à la main.
 
@@ -137,7 +155,7 @@ Réponses : `200 { upserted, ids }` · `401` clé absente/invalide · `422` vali
 ```bash
 npm install
 npm run dev         # http://localhost:3000
-npm test            # moteur de priorité, parsing mails, saisie rapide, API
+npm test            # priorités, parsing, accès aux données, isolation du portail, connexion (Postgres en mémoire)
 npm run typecheck
 npm run build
 ```
