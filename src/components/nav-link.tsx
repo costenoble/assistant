@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 export function NavLink({ href, label, count }: { href: string; label: string; count?: number }) {
-  const active = usePathname() === href;
+  const path = usePathname();
+  const active = path === href || (href !== "/" && path.startsWith(`${href}/`));
   return (
     <Link
       href={href}

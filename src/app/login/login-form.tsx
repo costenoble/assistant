@@ -12,7 +12,7 @@ export function LoginForm() {
         type="email"
         required
         autoComplete="email"
-        placeholder="ton@email.dev"
+        placeholder="vous@entreprise.fr"
         className="input w-full"
       />
       <button type="submit" disabled={pending} className="btn-primary w-full">
