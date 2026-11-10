@@ -8,9 +8,9 @@ import type { Item } from "@/lib/db/types";
 export const dynamic = "force-dynamic";
 
 export default async function TodayPage() {
-  const { supabase } = await requireOwner();
+  const { db } = await requireOwner();
   const now = new Date();
-  const data = await getTodayData(supabase, now);
+  const data = await getTodayData(db, now);
   const nextEvent = data.events.find((e) => e.ends_at && new Date(e.ends_at) > now);
 
   return (

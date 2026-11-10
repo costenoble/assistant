@@ -6,10 +6,10 @@ import { EmptyState, ItemRow } from "@/components/item-row";
 export const dynamic = "force-dynamic";
 
 export default async function InboxPage({ searchParams }: { searchParams: Promise<{ tout?: string }> }) {
-  const { supabase } = await requireOwner();
+  const { db } = await requireOwner();
   const showBulk = (await searchParams).tout === "1";
   const now = new Date();
-  const items = await getInbox(supabase, { showBulk }, now);
+  const items = await getInbox(db, { showBulk }, now);
 
   return (
     <div className="space-y-6">

@@ -16,12 +16,12 @@ const STATUS_TABS = [
 type Search = { ctx?: string; statut?: string };
 
 export default async function TasksPage({ searchParams }: { searchParams: Promise<Search> }) {
-  const { supabase } = await requireOwner();
+  const { db } = await requireOwner();
   const sp = await searchParams;
   const context = ITEM_CONTEXTS.find((c) => c === sp.ctx);
   const status = STATUS_TABS.find((t) => t.key === sp.statut)?.key ?? "open";
   const now = new Date();
-  const items = await getTasks(supabase, { context, status });
+  const items = await getTasks(db, { context, status });
 
   const href = (next: Partial<{ ctx: ItemContext | undefined; statut: string }>) => {
     const p = new URLSearchParams();

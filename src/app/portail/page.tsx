@@ -1,15 +1,15 @@
 import { requireClient } from "@/lib/auth/require-client";
-import { PROJECT_STATUS_LABELS, type Project } from "@/lib/db/types";
+import { getPortalProjects } from "@/lib/auth/access";
+import { PROJECT_STATUS_LABELS } from "@/lib/db/types";
 import { EmptyState } from "@/components/item-row";
 import { formatDay } from "@/lib/time/paris";
 
 export const dynamic = "force-dynamic";
 
 export default async function PortalHome() {
-  // Session du contact : la RLS ne renvoie que ses projets non-brouillons.
-  const { supabase, contact } = await requireClient();
-  const { data } = await supabase.from("projects").select("*").order("updated_at", { ascending: false });
-  const projects = (data ?? []) as Project[];
+  // Lecture bornée aux clients du contact connecté, hors brouillons.
+  const { db, contact, clientIds } = await requireClient();
+  const projects = await getPortalProjects(db, clientIds);
   const firstName = contact.full_name.split(" ")[0];
 
   return (

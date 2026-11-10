@@ -1,53 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+import { getSessionCookie } from "better-auth/cookies";
 
 /**
- * Proxy (ex-middleware, Next 16) : rafraîchit la session Supabase,
- * renvoie vers /login toute requête non authentifiée, et cantonne les
- * comptes clients au portail (/portail). L'admin (OWNER_EMAIL) voit tout.
+ * Proxy (ex-middleware, Next 16) : renvoie vers /login toute requête sans
+ * cookie de session. C'est un premier filtre, pas le contrôle d'accès : la
+ * session est vérifiée en base, et l'aiguillage admin / portail décidé, par
+ * requireOwner() et requireClient() dans chaque page, action et route.
  * Les routes machine (/api/ingest, /api/cron) ont leur propre auth par clé.
  */
-const PUBLIC_PATHS = ["/login", "/auth/callback", "/api/ingest", "/api/cron"];
+const PUBLIC_PATHS = ["/login", "/api/auth/magic-link", "/api/ingest", "/api/cron"];
 
-export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => request.cookies.getAll(),
-        setAll: (toSet) => {
-          for (const { name, value } of toSet) request.cookies.set(name, value);
-          response = NextResponse.next({ request });
-          for (const { name, value, options } of toSet) response.cookies.set(name, value, options);
-        },
-      },
-    },
-  );
-
-  const { data } = await supabase.auth.getUser();
+export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
+  if (isPublic || getSessionCookie(request)) return NextResponse.next();
 
-  if (isPublic) return response;
-  if (!data.user) return redirectTo(request, "/login");
-
-  const isOwner = data.user.email?.toLowerCase() === process.env.OWNER_EMAIL?.toLowerCase();
-  if (isOwner) return response;
-
-  // Tout autre compte connecté est un contact client potentiel : portail uniquement.
-  // requireClient() vérifie ensuite en base qu'il a bien un accès actif.
-  const isPortal = path === PORTAL || path.startsWith(`${PORTAL}/`);
-  return isPortal ? response : redirectTo(request, PORTAL);
-}
-
-const PORTAL = "/portail";
-
-function redirectTo(request: NextRequest, pathname: string) {
   const url = request.nextUrl.clone();
-  url.pathname = pathname;
+  url.pathname = "/login";
   url.search = "";
   return NextResponse.redirect(url);
 }

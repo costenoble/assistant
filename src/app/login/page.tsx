@@ -2,10 +2,9 @@ import { LoginForm } from "./login-form";
 
 export const metadata = { title: "Connexion · Cockpit" };
 
-const ERRORS: Record<string, string> = {
-  "lien-invalide": "Ce lien de connexion a expiré ou a déjà servi. Demandez-en un nouveau.",
-  "acces-retire": "Votre accès à l'espace client n'est plus actif. Contactez-nous si c'est une erreur.",
-};
+const ACCESS_REMOVED = "Votre accès à l'espace client n'est plus actif. Contactez-nous si c'est une erreur.";
+// Tout autre code vient de la validation du lien magique (expiré, déjà utilisé, invalide).
+const BAD_LINK = "Ce lien de connexion a expiré ou a déjà servi. Demandez-en un nouveau.";
 
 // Page vue par l'admin ET par les clients : vouvoiement, ton neutre.
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
@@ -18,7 +17,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <h1 className="text-2xl font-semibold">Connexion</h1>
           <p className="text-sm text-muted">Recevez un lien de connexion par email, sans mot de passe.</p>
         </div>
-        {error && ERRORS[error] && <p className="text-sm text-danger" role="alert">{ERRORS[error]}</p>}
+        {error && (
+          <p className="text-sm text-danger" role="alert">{error === "acces-retire" ? ACCESS_REMOVED : BAD_LINK}</p>
+        )}
         <LoginForm />
       </div>
     </main>
