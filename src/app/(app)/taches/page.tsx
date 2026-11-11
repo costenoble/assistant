@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireOwner } from "@/lib/auth/require-owner";
 import { getTasks } from "@/lib/items/queries";
 import { EmptyState, ItemRow } from "@/components/item-row";
+import { getClientOptions } from "@/lib/clients/link";
 import { QuickAdd } from "@/components/quick-add";
 import { CONTEXT_LABELS, ITEM_CONTEXTS, type ItemContext } from "@/lib/db/types";
 
@@ -21,7 +22,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const context = ITEM_CONTEXTS.find((c) => c === sp.ctx);
   const status = STATUS_TABS.find((t) => t.key === sp.statut)?.key ?? "open";
   const now = new Date();
-  const items = await getTasks(db, { context, status });
+  const [items, clients] = await Promise.all([getTasks(db, { context, status }), getClientOptions(db)]);
 
   const href = (next: Partial<{ ctx: ItemContext | undefined; statut: string }>) => {
     const p = new URLSearchParams();
@@ -54,7 +55,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       <section className="card overflow-hidden">
         {items.length ? (
           <ul className="divide-y divide-border">
-            {items.map((it) => <ItemRow key={it.id} item={it} now={now} />)}
+            {items.map((it) => <ItemRow key={it.id} item={it} now={now} clients={clients} />)}
           </ul>
         ) : (
           <EmptyState>Aucune tâche ici.</EmptyState>

@@ -6,6 +6,7 @@ import { mailAccounts, mailInitialSyncDays, microsoftConfig } from "@/lib/env";
 import { syncMailAccount } from "@/lib/mail/imap-sync";
 import { MICROSOFT_SOURCE_SLUG, syncMicrosoft } from "@/lib/microsoft/graph-sync";
 import { closePastEvents, recomputePriorities } from "@/lib/items/repo";
+import { linkItemsToClients } from "@/lib/clients/link";
 
 /**
  * Orchestrateur : synchronise chaque connecteur indépendamment (une panne
@@ -45,6 +46,11 @@ export async function runFullSync() {
   }
 
   await Promise.all(jobs);
+  try {
+    results.linkedToClients = await linkItemsToClients(db);
+  } catch (e) {
+    results.linkedToClients = { error: String(e) };
+  }
   try {
     results.closedEvents = await closePastEvents(db);
   } catch (e) {

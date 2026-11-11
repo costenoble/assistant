@@ -1,6 +1,7 @@
 import { requireOwner } from "@/lib/auth/require-owner";
 import { getTodayData } from "@/lib/items/queries";
 import { EmptyState, ItemRow } from "@/components/item-row";
+import { getClientOptions } from "@/lib/clients/link";
 import { QuickAdd } from "@/components/quick-add";
 import { formatLongDay, formatTime } from "@/lib/time/paris";
 import type { Item } from "@/lib/db/types";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function TodayPage() {
   const { db } = await requireOwner();
   const now = new Date();
-  const data = await getTodayData(db, now);
+  const [data, clients] = await Promise.all([getTodayData(db, now), getClientOptions(db)]);
   const nextEvent = data.events.find((e) => e.ends_at && new Date(e.ends_at) > now);
 
   return (
@@ -35,7 +36,7 @@ export default async function TodayPage() {
             <h2 className="section-title border-b border-border px-4 py-3">À faire maintenant</h2>
             {data.focus.length ? (
               <ul className="divide-y divide-border">
-                {data.focus.map((it) => <ItemRow key={it.id} item={it} now={now} />)}
+                {data.focus.map((it) => <ItemRow key={it.id} item={it} now={now} clients={clients} />)}
               </ul>
             ) : (
               <EmptyState>Rien d&apos;urgent. Profite-en pour avancer sur un projet de fond.</EmptyState>
@@ -46,7 +47,7 @@ export default async function TodayPage() {
             <h2 className="section-title border-b border-border px-4 py-3">Mails qui attendent une réponse</h2>
             {data.emails.length ? (
               <ul className="divide-y divide-border">
-                {data.emails.map((it) => <ItemRow key={it.id} item={it} now={now} />)}
+                {data.emails.map((it) => <ItemRow key={it.id} item={it} now={now} clients={clients} />)}
               </ul>
             ) : (
               <EmptyState>Boîte de réception sous contrôle.</EmptyState>

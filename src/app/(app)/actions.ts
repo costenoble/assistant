@@ -5,7 +5,8 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireOwner } from "@/lib/auth/require-owner";
 import { isUniqueViolation } from "@/lib/db";
-import { items, mailRules, sources } from "@/lib/db/schema";
+import { clients, items, mailRules, sources } from "@/lib/db/schema";
+import { findClientByRef } from "@/lib/clients/link";
 import { ITEM_CONTEXTS, ITEM_STATUSES, PRIORITY_LEVELS, RULE_ACTIONS, RULE_MATCHES } from "@/lib/db/types";
 import { recomputeOne } from "@/lib/items/repo";
 import { parseQuickAdd } from "@/lib/quick-add/parse";
@@ -25,12 +26,17 @@ export async function quickAdd(formData: FormData) {
   if (!raw.success) return;
   const { db } = await requireOwner();
   const p = parseQuickAdd(raw.data);
+  // Client : celui de la fiche d'où l'on saisit, sinon « @slug » dans le texte.
+  const fromForm = id.safeParse(formData.get("client_id"));
+  const clientId = fromForm.success ? fromForm.data : p.clientRef ? await findClientByRef(db, p.clientRef) : null;
   const [created] = await db
     .insert(items)
     .values({
       kind: "task",
       status: "todo",
-      title: p.title,
+      client_id: clientId,
+      // « @inconnu » n'est pas avalé en silence : il reste dans le titre.
+      title: p.clientRef && !clientId ? `${p.title} @${p.clientRef}` : p.title,
       context: p.context ?? "perso",
       manual_priority: p.manualPriority ?? null,
       due_at: p.dueAt ?? null,
@@ -60,6 +66,18 @@ export async function setPriority(itemId: string, level: (typeof PRIORITY_LEVELS
 export async function setContext(itemId: string, context: (typeof ITEM_CONTEXTS)[number]) {
   const { db } = await requireOwner();
   await db.update(items).set({ context: z.enum(ITEM_CONTEXTS).parse(context) }).where(eq(items.id, id.parse(itemId)));
+  refresh();
+}
+
+/** Rattache un item à un client (ou le détache avec null). */
+export async function setItemClient(itemId: string, clientId: string | null) {
+  const { db } = await requireOwner();
+  const target = clientId === null ? null : id.parse(clientId);
+  if (target) {
+    const [exists] = await db.select({ id: clients.id }).from(clients).where(eq(clients.id, target));
+    if (!exists) return;
+  }
+  await db.update(items).set({ client_id: target }).where(eq(items.id, id.parse(itemId)));
   refresh();
 }
 

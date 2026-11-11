@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireOwner } from "@/lib/auth/require-owner";
 import { getInbox } from "@/lib/items/queries";
 import { EmptyState, ItemRow } from "@/components/item-row";
+import { getClientOptions } from "@/lib/clients/link";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   const { db } = await requireOwner();
   const showBulk = (await searchParams).tout === "1";
   const now = new Date();
-  const items = await getInbox(db, { showBulk }, now);
+  const [items, clients] = await Promise.all([getInbox(db, { showBulk }, now), getClientOptions(db)]);
 
   return (
     <div className="space-y-6">
@@ -25,7 +26,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
       <section className="card overflow-hidden">
         {items.length ? (
           <ul className="divide-y divide-border">
-            {items.map((it) => <ItemRow key={it.id} item={it} now={now} />)}
+            {items.map((it) => <ItemRow key={it.id} item={it} now={now} clients={clients} />)}
           </ul>
         ) : (
           <EmptyState>Inbox zéro.</EmptyState>

@@ -1,10 +1,11 @@
-import type { ItemWithEmail } from "@/lib/db/types";
+import type { ClientOption, ItemWithEmail } from "@/lib/db/types";
+import { ClientPicker } from "./client-picker";
 import { formatDay, formatTime, relative } from "@/lib/time/paris";
 import { ContextTag, PriorityDot } from "./priority-badge";
 import { ItemActions } from "./item-actions";
 
 /** Ligne d'item générique : tâche, mail, suivi. */
-export function ItemRow({ item, now }: { item: ItemWithEmail; now: Date }) {
+export function ItemRow({ item, now, clients = [] }: { item: ItemWithEmail; now: Date; clients?: ClientOption[] }) {
   const email = item.email_messages;
   const overdue = item.due_at && new Date(item.due_at) < now;
   const from = email ? (email.from_name ?? email.from_address) : (item.metadata.from as string | undefined);
@@ -28,6 +29,7 @@ export function ItemRow({ item, now }: { item: ItemWithEmail; now: Date }) {
         )}
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
           <ContextTag context={item.context} />
+          <ClientPicker itemId={item.id} clientId={item.client_id} clients={clients} />
           {item.due_at && (
             <span className={overdue ? "font-medium text-critical" : ""}>
               {overdue ? "En retard · " : "Échéance "}

@@ -14,6 +14,15 @@ describe("parseQuickAdd", () => {
     expect(r.dueAt?.toISOString()).toBe("2026-11-10T13:00:00.000Z");
   });
 
+  it("repère le client après @, sans confondre avec une adresse mail", () => {
+    const r = parseQuickAdd("Envoyer la maquette @Cabinet-Leroy vendredi !!", NOW);
+    expect(r.clientRef).toBe("cabinet-leroy");
+    expect(r.title).toBe("Envoyer la maquette");
+    const mail = parseQuickAdd("Écrire à paul@client.fr demain", NOW);
+    expect(mail.clientRef).toBeUndefined();
+    expect(mail.title).toBe("Écrire à paul@client.fr");
+  });
+
   it("jour de semaine = la prochaine occurrence", () => {
     expect(parseQuickAdd("Facturer client vendredi", NOW).dueAt?.toISOString()).toBe("2026-11-13T17:00:00.000Z");
     expect(parseQuickAdd("Point hebdo lundi 9h30", NOW).dueAt?.toISOString()).toBe("2026-11-16T08:30:00.000Z");
