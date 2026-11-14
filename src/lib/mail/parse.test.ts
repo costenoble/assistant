@@ -7,6 +7,10 @@ const headers = (h: Record<string, string>) => {
 };
 
 describe("isBulkMail", () => {
+  it("ignore les notifications envoyées par l'app elle-même", () => {
+    expect(isBulkMail(headers({ "x-cockpit-notification": "ticket-owner" }), "ryan@cstlab.dev")).toBe(true);
+  });
+
   it("repère les newsletters via List-Unsubscribe", () => {
     expect(isBulkMail(headers({ "list-unsubscribe": "<mailto:x>" }), "news@brand.com")).toBe(true);
   });

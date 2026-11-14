@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import { requireOwner } from "@/lib/auth/require-owner";
 import { isUniqueViolation } from "@/lib/db";
@@ -48,7 +48,11 @@ export async function quickAdd(formData: FormData) {
 
 export async function setStatus(itemId: string, status: (typeof ITEM_STATUSES)[number]) {
   const { db } = await requireOwner();
-  await db.update(items).set({ status: z.enum(ITEM_STATUSES).parse(status) }).where(eq(items.id, id.parse(itemId)));
+  // Un item de ticket suit son ticket : son statut se change depuis /tickets.
+  await db
+    .update(items)
+    .set({ status: z.enum(ITEM_STATUSES).parse(status) })
+    .where(and(eq(items.id, id.parse(itemId)), ne(items.kind, "ticket")));
   await recomputeOne(db, itemId);
   refresh();
 }

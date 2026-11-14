@@ -38,6 +38,7 @@ src/
 ├─ components/
 │  ├─ db/                    Schéma Drizzle, connexion, types
 │  ├─ clients/               Rattachement des items aux clients, activité d'un client
+│  ├─ tickets/               Cycle de vie des tickets, lectures admin, notifications
 │  └─ auth/                  Better Auth · requireOwner · requireClient · access (périmètre client)
 └─ proxy.ts                  Premier filtre : pas de cookie de session → /login
 drizzle/                     Migrations SQL (générées depuis le schéma + triggers)
@@ -59,6 +60,9 @@ drizzle/                     Migrations SQL (générées depuis le schéma + tri
 | Clés SaaS | sha256 en base, affichées une fois, rotation en 1 clic | Standard type GitHub/Stripe |
 | Partageable vs interne | Rien d'interne dans une table lue par le portail (notes internes, mails, tâches → tables admin) | Une requête du portail ne peut pas ramener une colonne sensible par accident |
 | Rattachement client | `linkItemsToClients` après chaque synchro : contact exact, sinon domaine. Ne remplace jamais un rattachement existant | Automatique par défaut, mais ton choix manuel a toujours le dernier mot |
+| Tickets | Tables `tickets` + `ticket_messages`, plus un item miroir (kind `ticket`) tenu à jour par `lib/tickets/service.ts` | Le ticket garde sa conversation ; le flux, ses priorités et la fiche client le voient sans code en plus |
+| Statuts des tickets | Client écrit → « à traiter » ; tu réponds → « en attente du client » (ou « résolu ») ; note interne → rien ne change | Rien à trier à la main, et une réponse du client ne se perd jamais |
+| Notifications | Emails envoyés par l'app marqués `X-Cockpit-Notification`, classés automatiquement à la synchro IMAP. Un envoi raté n'annule jamais l'action | Pas de doublon dans ton flux ; un souci SMTP ne fait pas perdre un message |
 | Projets | `draft` = privé ; tout autre statut = visible du client | Tu prépares sans que le client voie un chantier vide |
 | Priorité | Règles déterministes + raisons affichées | Compréhensible et réglable ; un LLM pourra venir *en plus* (voir roadmap) |
 | Fréquence | Vercel Cron → `/api/cron/sync` : 1/jour sur Hobby, 15 min en Pro | 15 min tient dans le plan gratuit de Neon |
@@ -93,7 +97,7 @@ Vision : l'outil unique — assistant perso **et** gestion client (CRM, support,
 |---|---|---|
 | 0. Fondations | Corrections synchro, modèle admin + clients, portail minimal, passage à Neon + Better Auth | ✅ |
 | 1. CRM | Rattachement auto des mails à un client (contact, puis domaine), fil « à traiter » et notes internes par client, `@client` en saisie rapide | ✅ |
-| 2. Tickets & support | Demandes depuis le portail, par mail ou SaaS ; fil de discussion, statuts, SLA, pièces jointes (Vercel Blob) ; dans le flux « Aujourd'hui » | |
+| 2. Tickets | Demandes depuis le portail, fil de messages, notes internes, statuts qui avancent seuls, notifications email, item miroir dans le flux | ✅ |
 | 3. Livrables & previews | Maquettes versionnées (images, PDF, Figma), commentaires épinglés sur l'image, validation client ; sites testables en direct via les previews Vercel en iframe | |
 | 4. IA | Brief du matin, tri des tickets, brouillons de réponse, génération de maquettes / idées de site publiées en preview | |
 | Plus tard | Devis / factures (brancher Kompta.pro), temps passé | |
