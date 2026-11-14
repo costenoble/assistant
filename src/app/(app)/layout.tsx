@@ -1,12 +1,13 @@
 import { requireOwner } from "@/lib/auth/require-owner";
 import { getNavCounts } from "@/lib/items/queries";
+import { countOpenTickets } from "@/lib/tickets/queries";
 import { NavLink } from "@/components/nav-link";
 import { SyncButton } from "@/components/sync-button";
 import { signOut } from "@/app/login/actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { db } = await requireOwner();
-  const counts = await getNavCounts(db);
+  const [counts, openTickets] = await Promise.all([getNavCounts(db), countOpenTickets(db)]);
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-7xl flex-col md:flex-row">
@@ -16,6 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <NavLink href="/" label="Aujourd'hui" count={counts.urgentTasks} />
           <NavLink href="/inbox" label="Mails" count={counts.inbox} />
           <NavLink href="/taches" label="Tâches" />
+          <NavLink href="/tickets" label="Tickets" count={openTickets} />
           <NavLink href="/clients" label="Clients" />
           <NavLink href="/reglages" label="Réglages" />
         </nav>

@@ -14,6 +14,7 @@ export interface HeaderBag {
 export function isBulkMail(headers: HeaderBag | null | undefined, fromAddress: string | null | undefined): boolean {
   if (fromAddress && BULK_SENDER.test(fromAddress)) return true;
   if (!headers) return false;
+  if (headers.has("x-cockpit-notification")) return true; // envoyé par l'app elle-même
   if (headers.has("list-unsubscribe") || headers.has("list-id")) return true;
   const precedence = String(headers.get("precedence") ?? "").toLowerCase();
   if (["bulk", "list", "junk"].includes(precedence)) return true;
