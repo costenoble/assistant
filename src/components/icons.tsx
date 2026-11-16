@@ -1,0 +1,42 @@
+/**
+ * Icônes au trait, 16 px, couleur du texte. Décoratives par défaut :
+ * le bouton qui les porte doit avoir un aria-label.
+ */
+type P = { className?: string };
+const base = (className?: string) => ({
+  width: 16,
+  height: 16,
+  viewBox: "0 0 16 16",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.6,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  "aria-hidden": true,
+  className,
+});
+
+export const IconCheck = ({ className }: P) => <svg {...base(className)}><path d="M3.5 8.5l3 3 6-7" /></svg>;
+export const IconClock = ({ className }: P) => <svg {...base(className)}><circle cx="8" cy="8" r="6" /><path d="M8 4.5V8l2.5 1.5" /></svg>;
+export const IconPause = ({ className }: P) => <svg {...base(className)}><path d="M6 4v8M10 4v8" /></svg>;
+export const IconFlag = ({ className }: P) => <svg {...base(className)}><path d="M3.5 14V2.5M3.5 3h8l-1.5 3 1.5 3h-8" /></svg>;
+export const IconTask = ({ className }: P) => <svg {...base(className)}><rect x="2.5" y="2.5" width="11" height="11" rx="2.5" /><path d="M5.5 8l2 2 3-3.5" /></svg>;
+export const IconReply = ({ className }: P) => <svg {...base(className)}><path d="M6.5 4L3 7.5 6.5 11" /><path d="M3 7.5h6a4 4 0 014 4V12" /></svg>;
+export const IconSync = ({ className }: P) => <svg {...base(className)}><path d="M13 5.5A5.5 5.5 0 003.3 4.8M3 10.5a5.5 5.5 0 009.7.7" /><path d="M13 2.5v3h-3M3 13.5v-3h3" /></svg>;
+export const IconPlus = ({ className }: P) => <svg {...base(className)}><path d="M8 3v10M3 8h10" /></svg>;
+export const IconArrowLeft = ({ className }: P) => <svg {...base(className)}><path d="M12.5 8h-9M7 4.5L3.5 8 7 11.5" /></svg>;
+export const IconLock = ({ className }: P) => <svg {...base(className)}><rect x="3" y="7" width="10" height="7" rx="1.5" /><path d="M5.5 7V5a2.5 2.5 0 015 0v2" /></svg>;
+export const IconEye = ({ className }: P) => <svg {...base(className)}><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></svg>;
+export const IconExternal = ({ className }: P) => <svg {...base(className)}><path d="M9 3h4v4M13 3L7.5 8.5M11 9.5V13H3V5h3.5" /></svg>;
+export const IconLogout = ({ className }: P) => <svg {...base(className)}><path d="M6 14H3.5a1 1 0 01-1-1V3a1 1 0 011-1H6M10.5 11L13.5 8l-3-3M13.5 8H6" /></svg>;
+
+/** Marque Cockpit : un cadran. */
+export function LogoMark({ className }: P) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden className={className}>
+      <circle cx="11" cy="11" r="9" />
+      <path d="M11 11l5-5" />
+      <path d="M11 2v2M20 11h-2M4 11H2" />
+    </svg>
+  );
+}

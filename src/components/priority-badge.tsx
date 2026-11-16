@@ -1,10 +1,10 @@
 import { CONTEXT_LABELS, LEVEL_LABELS, type ItemContext, type PriorityLevel } from "@/lib/db/types";
 
 const LEVEL_STYLES: Record<PriorityLevel, string> = {
-  critical: "bg-critical/12 text-critical",
-  high: "bg-high/12 text-high",
-  normal: "bg-normal/10 text-normal",
-  low: "bg-low/15 text-muted",
+  critical: "bg-critical/15 text-critical",
+  high: "bg-high/15 text-high",
+  normal: "bg-normal/12 text-normal",
+  low: "bg-surface-2 text-muted",
 };
 
 export function PriorityBadge({ level }: { level: PriorityLevel }) {
@@ -15,13 +15,20 @@ export function PriorityBadge({ level }: { level: PriorityLevel }) {
   );
 }
 
-export function PriorityDot({ level }: { level: PriorityLevel }) {
-  const color = { critical: "bg-critical", high: "bg-high", normal: "bg-normal", low: "bg-low" }[level];
-  return <span aria-label={LEVEL_LABELS[level]} className={`mt-1.5 size-2 shrink-0 rounded-full ${color}`} />;
+const BAR: Record<PriorityLevel, string> = { critical: "bg-critical", high: "bg-high", normal: "bg-normal/70", low: "bg-low/60" };
+
+/** Barre de priorité à gauche d'une ligne. Le niveau est aussi lu par les lecteurs d'écran. */
+export function PriorityBar({ level }: { level: PriorityLevel }) {
+  return (
+    <span className={`w-[3px] shrink-0 self-stretch rounded-full ${BAR[level]}`}>
+      <span className="sr-only">Priorité {LEVEL_LABELS[level].toLowerCase()}</span>
+    </span>
+  );
 }
 
+/** @deprecated garde la compatibilité ; préférer PriorityBar. */
+export const PriorityDot = PriorityBar;
+
 export function ContextTag({ context }: { context: ItemContext }) {
-  return (
-    <span className="rounded border border-border px-1.5 py-0.5 text-[11px] text-muted">{CONTEXT_LABELS[context]}</span>
-  );
+  return <span className="chip">{CONTEXT_LABELS[context]}</span>;
 }

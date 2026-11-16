@@ -22,16 +22,16 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
   return (
     <div className="max-w-5xl space-y-6">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold">Tickets</h1>
+        <h1 className="page-title">Tickets</h1>
         <p className="text-sm text-muted">Les demandes envoyées par tes clients depuis leur espace.</p>
       </div>
-      <nav aria-label="Filtrer les tickets" className="flex flex-wrap gap-1">
+      <nav aria-label="Filtrer les tickets" className="tabs w-fit">
         {(Object.keys(TICKET_FILTERS) as TicketFilter[]).map((k) => (
           <Link
             key={k}
             href={k === "todo" ? "/tickets" : `/tickets?f=${k}`}
             aria-current={k === filter ? "page" : undefined}
-            className={`rounded-lg px-3 py-1.5 text-sm ${k === filter ? "bg-surface-2 font-medium" : "text-muted hover:bg-surface-2"}`}
+            className="tab"
           >
             {TICKET_FILTERS[k].label}
           </Link>

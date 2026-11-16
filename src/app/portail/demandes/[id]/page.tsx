@@ -34,7 +34,7 @@ export default async function RequestPage({
         </p>
       )}
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold"><span className="text-muted">#{ticket.number}</span> {ticket.subject}</h1>
+        <h1 className="page-title"><span className="text-muted">#{ticket.number}</span> {ticket.subject}</h1>
         <p className="text-sm text-muted">
           {TICKET_STATUS_LABELS_CLIENT[ticket.status]} · envoyée le {formatDay(ticket.created_at)}
         </p>

@@ -1,35 +1,46 @@
 @import "tailwindcss";
 
-/* ─── Design tokens ─────────────────────────────────────────────── */
+/*
+ * Deux thèmes, un seul jeu de noms :
+ * - clair (par défaut) : portail client et page de connexion, calme et lisible ;
+ * - sombre (.theme-dark) : l'espace admin, dense, fait pour être ouvert toute la journée.
+ * Les composants n'utilisent que ces jetons : changer un thème = changer ces valeurs.
+ * Contrastes vérifiés : texte ≥ 4.5:1 sur `surface` et `bg` dans les deux thèmes.
+ */
 :root {
-  --bg: #f6f6f4;
+  color-scheme: light;
+  --bg: #f6f6f3;
   --surface: #ffffff;
-  --surface-2: #f0f0ed;
-  --border: #e3e3de;
-  --text: #1b1b19;
-  --muted: #6b6b66;
-  --accent: #3d5afe;
-  --critical: #d92d20;
-  --high: #dc6803;
-  --normal: #3d5afe;
-  --low: #98a2b3;
-  --ok: #12b76a;
+  --surface-2: #f0f0eb;
+  --border: #e3e3dd;
+  --border-strong: #cfcfc7;
+  --text: #1a1b1d;
+  --muted: #5a6068;
+  --accent: #2459c7;
+  --accent-ink: #ffffff;
+  --critical: #b42318;
+  --high: #9a5b00;
+  --normal: #2459c7;
+  --low: #8a9099;
+  --ok: #17694a;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1012;
-    --surface: #17181b;
-    --surface-2: #1f2024;
-    --border: #2a2c31;
-    --text: #ececec;
-    --muted: #8d9099;
-    --accent: #7b8cff;
-    --critical: #f97066;
-    --high: #fdb022;
-    --normal: #7b8cff;
-    --low: #667085;
-    --ok: #32d583;
-  }
+
+.theme-dark {
+  color-scheme: dark;
+  --bg: #0d0e10;
+  --surface: #15171a;
+  --surface-2: #1c1f23;
+  --border: #24272c;
+  --border-strong: #33373e;
+  --text: #e8e9eb;
+  --muted: #a9afb7;
+  --accent: #6ba1ff;
+  --accent-ink: #0d0e10;
+  --critical: #ff7566;
+  --high: #f2b84b;
+  --normal: #6ba1ff;
+  --low: #5b626b;
+  --ok: #4cc38a;
 }
 
 @theme inline {
@@ -37,16 +48,19 @@
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
   --color-critical: var(--critical);
   --color-high: var(--high);
   --color-normal: var(--normal);
   --color-low: var(--low);
   --color-ok: var(--ok);
   --color-danger: var(--critical);
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-display-face), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
@@ -56,23 +70,50 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
 @layer components {
+  /* Structure */
   .card { @apply rounded-xl border border-border bg-surface; }
+  .card-header { @apply flex items-center justify-between gap-3 border-b border-border px-4 py-3; }
+  .section-title { @apply text-xs font-semibold uppercase tracking-[0.06em] text-muted; }
+  .page-title { @apply font-display text-[28px] leading-[34px] font-semibold tracking-[-0.02em]; }
+  .eyebrow { @apply text-sm text-muted; }
+
+  /* Champs */
   .input {
-    @apply rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none
-      placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20;
+    @apply h-10 rounded-lg border border-border bg-surface px-3 text-sm text-text outline-none transition
+      placeholder:text-muted hover:border-border-strong focus:border-accent focus:ring-2 focus:ring-accent/25;
   }
+  textarea.input { @apply h-auto py-2.5 leading-6; }
+
+  /* Boutons */
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-surface
-      px-3 py-1.5 text-sm font-medium transition hover:bg-surface-2 disabled:opacity-50;
+    @apply inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-border bg-surface px-3.5
+      text-sm font-medium text-text transition hover:border-border-strong hover:bg-surface-2 disabled:opacity-50;
   }
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm
-      font-medium text-white transition hover:opacity-90 disabled:opacity-50;
+    @apply inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-semibold
+      text-accent-ink transition hover:brightness-110 disabled:opacity-50;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center rounded-md px-2 py-1 text-xs font-medium text-muted
-      transition hover:bg-surface-2 hover:text-text;
+    @apply inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted
+      transition hover:bg-surface-2 hover:text-text disabled:opacity-50;
   }
-  .section-title { @apply text-xs font-semibold uppercase tracking-wider text-muted; }
+  .icon-btn {
+    @apply inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted transition
+      hover:bg-surface-2 hover:text-text disabled:opacity-40;
+  }
+
+  /* Petits éléments */
+  .chip { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] leading-4 text-muted; }
+  .count { @apply rounded-full bg-surface-2 px-2 text-xs font-semibold tabular-nums text-text; }
+  .count-alert { @apply rounded-full bg-critical px-2 text-xs font-semibold tabular-nums text-bg; }
+
+  /* Onglets de filtre */
+  .tabs { @apply flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1; }
+  .tab { @apply rounded-md px-3 py-1.5 text-sm text-muted transition hover:text-text; }
+  .tab[aria-current="page"] { @apply bg-surface-2 font-medium text-text; }
 }

@@ -17,11 +17,11 @@ export function ClientPicker({ itemId, clientId, clients }: { itemId: string; cl
         const next = e.target.value || null;
         start(() => setItemClient(itemId, next));
       }}
-      className={`max-w-40 rounded border px-1.5 py-0.5 text-[11px] outline-none ${
-        clientId ? "border-accent/40 bg-accent/10 font-medium text-accent" : "border-border bg-transparent text-muted"
+      className={`max-w-44 cursor-pointer appearance-none rounded-md border px-1.5 py-0.5 text-[11px] leading-4 outline-none transition [field-sizing:content] ${
+        clientId ? "border-accent/30 bg-accent/10 font-medium text-accent" : "border-transparent bg-transparent text-muted hover:border-border"
       } ${pending ? "opacity-50" : ""}`}
     >
-      <option value="">Client…</option>
+      <option value="">+ Client</option>
       {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
     </select>
   );
