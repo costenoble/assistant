@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { TICKET_STATUS_LABELS, type TicketStatus } from "@/lib/db/types";
+import { statusLabel, type TicketKind, type TicketStatus } from "@/lib/db/types";
 import { relative } from "@/lib/time/paris";
 
 export interface TicketListRow {
@@ -29,8 +29,8 @@ const STATUS_STYLE: Record<TicketStatus, string> = {
   resolved: "bg-ok/15 text-ok",
 };
 
-export function TicketStatusBadge({ status }: { status: TicketStatus }) {
-  return <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_STYLE[status]}`}>{TICKET_STATUS_LABELS[status]}</span>;
+export function TicketStatusBadge({ status, kind = "request" }: { status: TicketStatus; kind?: TicketKind }) {
+  return <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_STYLE[status]}`}>{statusLabel(kind, status, "admin")}</span>;
 }
 
 /** Liste admin. `showClient` : masqué sur la fiche d'un client. */

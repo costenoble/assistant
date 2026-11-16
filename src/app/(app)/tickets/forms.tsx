@@ -1,10 +1,14 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
-import { TICKET_STATUSES, TICKET_STATUS_LABELS, type TicketStatus } from "@/lib/db/types";
+import { TICKET_STATUSES, statusLabel, type TicketKind, type TicketStatus } from "@/lib/db/types";
 import { changeTicketStatus, replyToTicket, type ReplyState } from "./actions";
 
-export function ReplyForm({ ticketId, canNotify }: { ticketId: string; canNotify: boolean }) {
+/**
+ * Réponse de l'admin. Demande : Répondre / Répondre et résoudre.
+ * Tâche : Commenter / Envoyer en validation / Marquer fait. Note interne dans les deux cas.
+ */
+export function ReplyForm({ ticketId, kind, canNotify }: { ticketId: string; kind: TicketKind; canNotify: boolean }) {
   const ref = useRef<HTMLFormElement>(null);
   const [internal, setInternal] = useState(false);
   const [state, action, pending] = useActionState<ReplyState, FormData>(replyToTicket, null);
@@ -15,17 +19,18 @@ export function ReplyForm({ ticketId, canNotify }: { ticketId: string; canNotify
       setInternal(false);
     }
   }, [state]);
+  const task = kind === "task";
 
   return (
     <form ref={ref} action={action} className="space-y-3">
       <input type="hidden" name="ticket_id" value={ticketId} />
-      <label htmlFor="reply" className="sr-only">Réponse</label>
+      <label htmlFor="reply" className="sr-only">{task ? "Commentaire" : "Réponse"}</label>
       <textarea
         id="reply"
         name="body"
         required
-        rows={5}
-        placeholder={internal ? "Note pour toi : jamais montrée au client" : "Ta réponse au client…"}
+        rows={4}
+        placeholder={internal ? "Note pour toi : jamais montrée au client" : task ? "Un commentaire, ou ce que tu as livré…" : "Ta réponse au client…"}
         className={`input w-full resize-y ${internal ? "border-high/50 bg-high/5" : ""}`}
       />
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -36,6 +41,12 @@ export function ReplyForm({ ticketId, canNotify }: { ticketId: string; canNotify
         <div className="flex flex-wrap gap-2">
           {internal ? (
             <button className="btn" disabled={pending}>Ajouter la note</button>
+          ) : task ? (
+            <>
+              <button className="btn" name="intent" value="resolve" disabled={pending}>Marquer fait</button>
+              <button className="btn" name="intent" value="submit" disabled={pending}>Envoyer en validation</button>
+              <button className="btn-primary" name="intent" value="comment" disabled={pending}>Commenter</button>
+            </>
           ) : (
             <>
               <button className="btn" name="intent" value="resolve" disabled={pending}>Répondre et résoudre</button>
@@ -45,7 +56,7 @@ export function ReplyForm({ ticketId, canNotify }: { ticketId: string; canNotify
         </div>
       </div>
       {!internal && !canNotify && (
-        <p className="text-xs text-muted">Ce contact n&apos;a pas (ou plus) d&apos;accès portail : il ne sera pas prévenu par email.</p>
+        <p className="text-xs text-muted">Personne côté client n&apos;a accès au portail : personne ne sera prévenu par email.</p>
       )}
       {state?.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
       {state?.message && <p className="text-sm text-muted" role="status">{state.message}</p>}
@@ -53,17 +64,17 @@ export function ReplyForm({ ticketId, canNotify }: { ticketId: string; canNotify
   );
 }
 
-export function TicketStatusSelect({ ticketId, status }: { ticketId: string; status: TicketStatus }) {
+export function TicketStatusSelect({ ticketId, kind, status }: { ticketId: string; kind: TicketKind; status: TicketStatus }) {
   const [pending, start] = useTransition();
   return (
     <select
-      aria-label="Statut du ticket"
+      aria-label="Statut"
       className="input"
       value={status}
       disabled={pending}
       onChange={(e) => start(() => changeTicketStatus(ticketId, e.target.value))}
     >
-      {TICKET_STATUSES.map((s) => <option key={s} value={s}>{TICKET_STATUS_LABELS[s]}</option>)}
+      {TICKET_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(kind, s, "admin")}</option>)}
     </select>
   );
 }

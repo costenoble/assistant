@@ -8,8 +8,8 @@ import { isOwnerEmail, requireOwner } from "@/lib/auth/require-owner";
 import { isUniqueViolation } from "@/lib/db";
 import { clientContacts, clientNotes, clients, projects } from "@/lib/db/schema";
 import { linkItemsToClients } from "@/lib/clients/link";
+import { sendPortalInvitation } from "@/lib/tickets/notify";
 import { CLIENT_STATUSES, PROJECT_STATUSES } from "@/lib/db/types";
-import { env } from "@/lib/env";
 
 const id = z.uuid();
 const optionalText = (max: number) =>
@@ -118,9 +118,21 @@ export async function deleteContact(contactId: string, clientId: string) {
   revalidatePath(`/clients/${clientId}`);
 }
 
+/** Envoie l'invitation ; renvoie un message d'erreur lisible si l'email ne part pas. */
+async function invite(db: Parameters<typeof linkItemsToClients>[0], contact: { email: string; full_name: string; client_id: string }) {
+  const [client] = await db.select({ name: clients.name }).from(clients).where(eq(clients.id, contact.client_id));
+  try {
+    await sendPortalInvitation(contact, client?.name ?? "client");
+    return null;
+  } catch (err) {
+    console.error("[invitation]", err);
+    return "L'email d'invitation n'est pas parti. Réessaie avec « Renvoyer l'invitation ».";
+  }
+}
+
 /**
- * Ouvre ou retire l'accès portail. Aucun compte à créer : le contact se
- * connecte par lien magique avec son email, tant que l'accès est ouvert.
+ * Ouvre (= invite) ou retire l'accès portail. Aucun compte à créer : le contact
+ * reçoit un email d'invitation et se connecte par lien magique, tant que l'accès est ouvert.
  */
 export async function setPortalAccess(contactId: string, enabled: boolean): Promise<FormState> {
   const { db } = await requireOwner();
@@ -133,11 +145,17 @@ export async function setPortalAccess(contactId: string, enabled: boolean): Prom
   }
   await db.update(clientContacts).set({ portal_access: enabled }).where(eq(clientContacts.id, contact.id));
   revalidatePath(`/clients/${contact.client_id}`);
-  return {
-    message: enabled
-      ? `Accès ouvert. ${contact.email} peut se connecter sur ${env().NEXT_PUBLIC_APP_URL}/login (lien magique).`
-      : "Accès retiré : le contact ne voit plus rien dès maintenant.",
-  };
+  if (!enabled) return { message: "Accès retiré : le contact ne voit plus rien dès maintenant." };
+  const failed = await invite(db, { email: contact.email!, full_name: contact.full_name, client_id: contact.client_id });
+  return failed ? { error: `Accès ouvert. ${failed}` } : { message: `Invitation envoyée à ${contact.email}.` };
+}
+
+export async function resendInvitation(contactId: string): Promise<FormState> {
+  const { db } = await requireOwner();
+  const [contact] = await db.select().from(clientContacts).where(eq(clientContacts.id, id.parse(contactId)));
+  if (!contact?.email || !contact.portal_access) return { error: "Ce contact n'a pas d'accès ouvert." };
+  const failed = await invite(db, { email: contact.email, full_name: contact.full_name, client_id: contact.client_id });
+  return failed ? { error: failed } : { message: `Invitation renvoyée à ${contact.email}.` };
 }
 
 // ─── Notes internes ─────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db";
 import { clientContacts, clients, projects, ticketMessages, tickets } from "@/lib/db/schema";
 
@@ -50,44 +50,48 @@ export async function getPortalProjects(db: Db, clientIds: string[]) {
     .orderBy(desc(projects.updated_at));
 }
 
-// ─── Demandes (tickets) ──────────────────────────────────────────────
+// ─── Demandes et tâches de projet (tickets) ──────────────────────────
 
-/** Demandes visibles par un client : celles de ses clients, la plus récente d'abord. */
-export async function getPortalTickets(db: Db, clientIds: string[]) {
+/** Un ticket est visible du client s'il est chez l'un de ses clients et hors projet en brouillon. */
+const visibleToPortal = (clientIds: string[]) =>
+  and(inArray(tickets.client_id, clientIds), or(isNull(tickets.project_id), ne(projects.status, "draft")));
+
+const portalTicketColumns = {
+  id: tickets.id,
+  number: tickets.number,
+  kind: tickets.kind,
+  subject: tickets.subject,
+  status: tickets.status,
+  urgent: tickets.urgent,
+  client_id: tickets.client_id,
+  project_id: tickets.project_id,
+  project_name: projects.name,
+  last_message_at: tickets.last_message_at,
+  created_at: tickets.created_at,
+};
+
+/** Demandes et tâches visibles par un client, la plus récente d'abord. `kind` pour n'en garder qu'une sorte. */
+export async function getPortalTickets(db: Db, clientIds: string[], kind?: "request" | "task") {
   if (!clientIds.length) return [];
   return db
-    .select({
-      id: tickets.id,
-      number: tickets.number,
-      subject: tickets.subject,
-      status: tickets.status,
-      client_id: tickets.client_id,
-      last_message_at: tickets.last_message_at,
-      created_at: tickets.created_at,
-    })
+    .select(portalTicketColumns)
     .from(tickets)
-    .where(inArray(tickets.client_id, clientIds))
+    .leftJoin(projects, eq(projects.id, tickets.project_id))
+    .where(and(visibleToPortal(clientIds), kind ? eq(tickets.kind, kind) : undefined))
     .orderBy(desc(tickets.last_message_at));
 }
 
 /**
- * Une demande et ses messages, si elle appartient à l'un des clients du
- * contact. Les notes internes de l'admin ne sortent jamais d'ici.
+ * Une demande ou une tâche et ses messages, si elle est visible du contact.
+ * Les notes internes de l'admin ne sortent jamais d'ici.
  */
 export async function getPortalTicket(db: Db, clientIds: string[], ticketId: string) {
   if (!clientIds.length) return null;
   const [ticket] = await db
-    .select({
-      id: tickets.id,
-      number: tickets.number,
-      subject: tickets.subject,
-      status: tickets.status,
-      client_id: tickets.client_id,
-      project_id: tickets.project_id,
-      created_at: tickets.created_at,
-    })
+    .select(portalTicketColumns)
     .from(tickets)
-    .where(and(eq(tickets.id, ticketId), inArray(tickets.client_id, clientIds)));
+    .leftJoin(projects, eq(projects.id, tickets.project_id))
+    .where(and(eq(tickets.id, ticketId), visibleToPortal(clientIds)));
   if (!ticket) return null;
   const messages = await db
     .select({
@@ -102,6 +106,25 @@ export async function getPortalTicket(db: Db, clientIds: string[], ticketId: str
     .where(and(eq(ticketMessages.ticket_id, ticketId), eq(ticketMessages.internal, false)))
     .orderBy(asc(ticketMessages.created_at));
   return { ...ticket, messages };
+}
+
+/** Un projet visible du contact (son client, hors brouillon), avec ses tâches partagées. */
+export async function getPortalProject(db: Db, clientIds: string[], projectId: string) {
+  const project = (await getPortalProjects(db, clientIds)).find((p) => p.id === projectId);
+  if (!project) return null;
+  const tasks = await db
+    .select({
+      ...portalTicketColumns,
+      author_name: clientContacts.full_name,
+      // Nombre de messages visibles du client, pour l'aperçu.
+      replies: sql<number>`(select count(*)::int from ticket_messages m where m.ticket_id = tickets.id and not m.internal)`,
+    })
+    .from(tickets)
+    .leftJoin(projects, eq(projects.id, tickets.project_id))
+    .leftJoin(clientContacts, eq(clientContacts.id, tickets.contact_id))
+    .where(and(eq(tickets.project_id, project.id), eq(tickets.kind, "task")))
+    .orderBy(desc(tickets.urgent), desc(tickets.last_message_at));
+  return { project, tasks };
 }
 
 /**

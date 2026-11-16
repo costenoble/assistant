@@ -10,9 +10,13 @@ export const dynamic = "force-dynamic";
 export default async function PortalHome() {
   // Lecture bornée aux clients du contact connecté, hors brouillons.
   const { db, contact, clientIds } = await requireClient();
-  const [projects, requests] = await Promise.all([getPortalProjects(db, clientIds), getPortalTickets(db, clientIds)]);
+  const [projects, all] = await Promise.all([getPortalProjects(db, clientIds), getPortalTickets(db, clientIds)]);
   const now = new Date();
-  const awaitingYou = requests.filter((r) => r.status === "waiting_client").length;
+  const requests = all.filter((t) => t.kind === "request");
+  const tasks = all.filter((t) => t.kind === "task");
+  const taskCount = (projectId: string, statuses: string[]) =>
+    tasks.filter((t) => t.project_id === projectId && statuses.includes(t.status)).length;
+  const awaitingYou = all.filter((r) => r.status === "waiting_client").length;
   const firstName = contact.full_name.split(" ")[0];
 
   return (
@@ -22,7 +26,7 @@ export default async function PortalHome() {
           <h1 className="page-title text-[32px] leading-[38px]">Bonjour {firstName}</h1>
           <p className="text-[15px] text-muted">
             {awaitingYou > 0
-              ? awaitingYou === 1 ? "Une réponse vous attend dans vos demandes." : `${awaitingYou} réponses vous attendent dans vos demandes.`
+              ? awaitingYou === 1 ? "Un élément attend votre validation ou votre réponse." : `${awaitingYou} éléments attendent votre validation ou votre réponse.`
               : "Retrouvez ici l'avancement de vos projets et vos échanges avec nous."}
           </p>
         </div>
@@ -34,7 +38,7 @@ export default async function PortalHome() {
         {projects.length ? (
           <div className="grid gap-4 sm:grid-cols-2">
             {projects.map((p) => (
-              <article key={p.id} className="card flex flex-col gap-3 p-5">
+              <Link key={p.id} href={`/portail/projets/${p.id}`} className="card flex flex-col gap-3 p-5 transition hover:border-border-strong hover:shadow-[0_8px_24px_-16px_rgba(0,0,0,0.25)]">
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="font-display text-[17px] font-semibold leading-6">{p.name}</h3>
                   <span className="shrink-0 rounded-md bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent">
@@ -42,8 +46,14 @@ export default async function PortalHome() {
                   </span>
                 </div>
                 {p.description && <p className="text-sm leading-6 text-muted">{p.description}</p>}
-                {p.due_on && <p className="mt-auto text-sm text-muted">Livraison prévue le {formatDay(p.due_on)}</p>}
-              </article>
+                <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 pt-1 text-sm text-muted">
+                  {taskCount(p.id, ["waiting_client"]) > 0 && (
+                    <span className="font-semibold text-accent">{taskCount(p.id, ["waiting_client"])} à valider</span>
+                  )}
+                  <span>{taskCount(p.id, ["open", "in_progress"])} en cours</span>
+                  {p.due_on && <span>Livraison le {formatDay(p.due_on)}</span>}
+                </div>
+              </Link>
             ))}
           </div>
         ) : (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef } from "react";
-import { createRequest, replyToRequest, type PortalFormState } from "./actions";
+import { createRequest, createTask, replyToRequest, validateTask, type PortalFormState } from "./actions";
 
 function Error({ state }: { state: PortalFormState }) {
   return state?.error ? <p className="text-sm text-danger" role="alert">{state.error}</p> : null;
@@ -56,7 +56,46 @@ export function NewRequestForm({
   );
 }
 
-export function RequestReplyForm({ ticketId, resolved }: { ticketId: string; resolved: boolean }) {
+export function NewTaskForm({ projectId }: { projectId: string }) {
+  const ref = useRef<HTMLFormElement>(null);
+  const [state, action, pending] = useActionState<PortalFormState, FormData>(createTask, null);
+  useEffect(() => {
+    if (state?.sent) ref.current?.reset();
+  }, [state]);
+  return (
+    <form ref={ref} action={action} className="space-y-3">
+      <input type="hidden" name="project_id" value={projectId} />
+      <div className="space-y-1">
+        <label htmlFor="task-subject" className="text-sm font-medium">Nouvelle tâche</label>
+        <input id="task-subject" name="subject" required maxLength={200} placeholder="Ex. Ajouter un export CSV sur l'écran des plannings" className="input w-full" />
+      </div>
+      <label htmlFor="task-body" className="sr-only">Détail</label>
+      <textarea id="task-body" name="body" rows={3} placeholder="Détail, contexte, ce que vous attendez exactement (facultatif)" className="input w-full resize-y" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="urgent" />
+          C&apos;est prioritaire
+        </label>
+        <button className="btn-primary" disabled={pending}>{pending ? "Envoi…" : "Ajouter la tâche"}</button>
+      </div>
+      <Error state={state} />
+      {state?.sent && <p className="text-sm text-ok" role="status">Tâche ajoutée. Vous serez prévenu par email de son avancement.</p>}
+    </form>
+  );
+}
+
+export function ValidateTaskForm({ ticketId }: { ticketId: string }) {
+  const [state, action, pending] = useActionState<PortalFormState, FormData>(validateTask, null);
+  return (
+    <form action={action} className="space-y-2">
+      <input type="hidden" name="ticket_id" value={ticketId} />
+      <button className="btn-primary" disabled={pending}>{pending ? "…" : "Valider la tâche"}</button>
+      <Error state={state} />
+    </form>
+  );
+}
+
+export function RequestReplyForm({ ticketId, resolved, task }: { ticketId: string; resolved: boolean; task?: boolean }) {
   const ref = useRef<HTMLFormElement>(null);
   const [state, action, pending] = useActionState<PortalFormState, FormData>(replyToRequest, null);
   useEffect(() => {
@@ -65,7 +104,11 @@ export function RequestReplyForm({ ticketId, resolved }: { ticketId: string; res
   return (
     <form ref={ref} action={action} className="space-y-3">
       <input type="hidden" name="ticket_id" value={ticketId} />
-      <label htmlFor="reply" className="text-sm font-medium">{resolved ? "Le problème persiste ? Répondez pour rouvrir la demande" : "Votre réponse"}</label>
+      <label htmlFor="reply" className="block text-sm font-medium">
+        {task
+          ? resolved ? "Quelque chose ne va pas ? Commentez pour rouvrir la tâche" : "Votre commentaire"
+          : resolved ? "Le problème persiste ? Répondez pour rouvrir la demande" : "Votre réponse"}
+      </label>
       <textarea id="reply" name="body" required rows={4} className="input w-full resize-y" />
       <Error state={state} />
       <button className="btn-primary" disabled={pending}>{pending ? "Envoi…" : "Envoyer"}</button>

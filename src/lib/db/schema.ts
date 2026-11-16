@@ -25,6 +25,7 @@ import {
   RULE_MATCHES,
   SOURCE_KINDS,
   TICKET_AUTHORS,
+  TICKET_KINDS,
   TICKET_STATUSES,
 } from "./types";
 
@@ -48,6 +49,7 @@ export const clientStatus = pgEnum("client_status", CLIENT_STATUSES);
 export const projectStatus = pgEnum("project_status", PROJECT_STATUSES);
 export const ticketStatus = pgEnum("ticket_status", TICKET_STATUSES);
 export const ticketAuthor = pgEnum("ticket_author", TICKET_AUTHORS);
+export const ticketKind = pgEnum("ticket_kind", TICKET_KINDS);
 
 // ─── Clients, contacts, projets ─────────────────────────────────────
 
@@ -173,6 +175,7 @@ export const tickets = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     number: integer("number").generatedAlwaysAsIdentity().notNull().unique(), // affiché « #12 »
+    kind: ticketKind("kind").notNull().default("request"),
     client_id: uuid("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
     project_id: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
     contact_id: uuid("contact_id").references(() => clientContacts.id, { onDelete: "set null" }), // auteur
@@ -185,7 +188,11 @@ export const tickets = pgTable(
     created_at: ts("created_at").notNull().defaultNow(),
     updated_at: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
   },
-  (t) => [index("tickets_client_idx").on(t.client_id), index("tickets_status_idx").on(t.status)],
+  (t) => [
+    index("tickets_client_idx").on(t.client_id),
+    index("tickets_status_idx").on(t.status),
+    index("tickets_project_idx").on(t.project_id),
+  ],
 );
 
 /** `internal` = note de l'admin, jamais montrée au client. */
