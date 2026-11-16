@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, inArray, lt, notInArray } from "drizzle-orm";
 import type { Db } from "@/lib/db";
-import { emailMessages, items, mailRules, sources } from "@/lib/db/schema";
+import { emailMessages, items, mailRules, sources, tickets } from "@/lib/db/schema";
 import type { ItemContext, ItemKind, ItemStatus, Source, SourceKind } from "@/lib/db/types";
 import { computePriority } from "@/lib/priority/score";
 
@@ -163,10 +163,18 @@ const priorityColumns = {
     is_bulk: emailMessages.is_bulk,
     received_at: emailMessages.received_at,
   },
+  ticket: {
+    urgent: tickets.urgent,
+    last_client_message_at: tickets.last_client_message_at,
+  },
 };
 
 function priorityRows(db: Db) {
-  return db.select(priorityColumns).from(items).leftJoin(emailMessages, eq(emailMessages.item_id, items.id));
+  return db
+    .select(priorityColumns)
+    .from(items)
+    .leftJoin(emailMessages, eq(emailMessages.item_id, items.id))
+    .leftJoin(tickets, eq(tickets.item_id, items.id));
 }
 type PriorityRow = Awaited<ReturnType<typeof priorityRows>>[number];
 
@@ -190,6 +198,9 @@ function scoreRow(row: PriorityRow, rules: (typeof mailRules.$inferSelect)[], no
             isBulk: row.email.is_bulk,
             receivedAt: row.email.received_at,
           }
+        : null,
+      ticket: row.ticket
+        ? { urgent: row.ticket.urgent, lastClientMessageAt: row.ticket.last_client_message_at }
         : null,
     },
     { now, rules },

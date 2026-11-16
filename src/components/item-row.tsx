@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ClientOption, ItemWithEmail } from "@/lib/db/types";
 import { ClientPicker } from "./client-picker";
 import { formatDay, formatTime, relative } from "@/lib/time/paris";
@@ -15,7 +16,9 @@ export function ItemRow({ item, now, clients = [] }: { item: ItemWithEmail; now:
       <PriorityDot level={item.priority_level} />
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-baseline gap-x-2">
-          {item.url ? (
+          {item.url?.startsWith("/") ? (
+            <Link href={item.url} className="truncate font-medium hover:underline">{item.title}</Link>
+          ) : item.url ? (
             <a href={item.url} target="_blank" rel="noreferrer" className="truncate font-medium hover:underline">
               {item.title}
             </a>
@@ -42,7 +45,11 @@ export function ItemRow({ item, now, clients = [] }: { item: ItemWithEmail; now:
           ))}
         </div>
       </div>
-      <ItemActions id={item.id} kind={item.kind} status={item.status} />
+      {item.kind === "ticket" ? (
+        <Link href={item.url ?? "/tickets"} className="btn-ghost shrink-0 self-start">Répondre</Link>
+      ) : (
+        <ItemActions id={item.id} kind={item.kind} status={item.status} />
+      )}
     </li>
   );
 }

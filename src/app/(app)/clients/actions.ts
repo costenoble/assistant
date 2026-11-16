@@ -84,8 +84,13 @@ export async function updateClient(clientId: string, formData: FormData) {
 
 // ─── Contacts ───────────────────────────────────────────────────────
 
-export async function addContact(clientId: string, _prev: FormState, formData: FormData): Promise<FormState> {
+// Le client visé arrive dans un champ caché `client_id` plutôt que par .bind() :
+// un formulaire envoyé avant la fin du chargement de la page restait sinon bloqué.
+export async function addContact(_prev: FormState, formData: FormData): Promise<FormState> {
   const { db } = await requireOwner();
+  const cid = id.safeParse(formData.get("client_id"));
+  if (!cid.success) return { error: "Client introuvable" };
+  const clientId = cid.data;
   const parsed = z
     .object({
       full_name: z.string().trim().min(1, "Nom obligatoire").max(200),
@@ -97,7 +102,7 @@ export async function addContact(clientId: string, _prev: FormState, formData: F
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide" };
 
   try {
-    await db.insert(clientContacts).values({ client_id: id.parse(clientId), ...parsed.data });
+    await db.insert(clientContacts).values({ client_id: clientId, ...parsed.data });
   } catch (err) {
     if (isUniqueViolation(err)) return { error: "Ce contact existe déjà pour ce client." };
     throw err;
@@ -153,8 +158,11 @@ export async function deleteNote(noteId: string, clientId: string) {
 
 // ─── Projets ────────────────────────────────────────────────────────
 
-export async function addProject(clientId: string, _prev: FormState, formData: FormData): Promise<FormState> {
+export async function addProject(_prev: FormState, formData: FormData): Promise<FormState> {
   const { db } = await requireOwner();
+  const cid = id.safeParse(formData.get("client_id"));
+  if (!cid.success) return { error: "Client introuvable" };
+  const clientId = cid.data;
   const parsed = z
     .object({
       name: z.string().trim().min(1, "Nom obligatoire").max(200),
@@ -164,7 +172,7 @@ export async function addProject(clientId: string, _prev: FormState, formData: F
     .safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide" };
 
-  await db.insert(projects).values({ client_id: id.parse(clientId), status: "draft", ...parsed.data });
+  await db.insert(projects).values({ client_id: clientId, status: "draft", ...parsed.data });
   revalidatePath(`/clients/${clientId}`);
   return { message: "Projet créé en brouillon (invisible du client tant que tu ne changes pas son statut)." };
 }

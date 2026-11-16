@@ -4,6 +4,7 @@ import {
   boolean,
   date,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -23,6 +24,8 @@ import {
   RULE_ACTIONS,
   RULE_MATCHES,
   SOURCE_KINDS,
+  TICKET_AUTHORS,
+  TICKET_STATUSES,
 } from "./types";
 
 /**
@@ -43,6 +46,8 @@ export const ruleMatch = pgEnum("rule_match", RULE_MATCHES);
 export const ruleAction = pgEnum("rule_action", RULE_ACTIONS);
 export const clientStatus = pgEnum("client_status", CLIENT_STATUSES);
 export const projectStatus = pgEnum("project_status", PROJECT_STATUSES);
+export const ticketStatus = pgEnum("ticket_status", TICKET_STATUSES);
+export const ticketAuthor = pgEnum("ticket_author", TICKET_AUTHORS);
 
 // ─── Clients, contacts, projets ─────────────────────────────────────
 
@@ -155,6 +160,47 @@ export const items = pgTable(
     index("items_kind_status_idx").on(t.kind, t.status),
     index("items_client_idx").on(t.client_id).where(sql`client_id is not null`),
   ],
+);
+
+// ─── Tickets ────────────────────────────────────────────────────────
+
+/**
+ * Demande d'un client. Chaque ticket a un item miroir (`item_id`, kind
+ * 'ticket') pour apparaître dans le flux admin, tenu à jour par lib/tickets.
+ */
+export const tickets = pgTable(
+  "tickets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    number: integer("number").generatedAlwaysAsIdentity().notNull().unique(), // affiché « #12 »
+    client_id: uuid("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+    project_id: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    contact_id: uuid("contact_id").references(() => clientContacts.id, { onDelete: "set null" }), // auteur
+    item_id: uuid("item_id").unique().references(() => items.id, { onDelete: "set null" }),
+    subject: text("subject").notNull(),
+    status: ticketStatus("status").notNull().default("open"),
+    urgent: boolean("urgent").notNull().default(false), // « bloquant » coché par le client
+    last_client_message_at: ts("last_client_message_at"),
+    last_message_at: ts("last_message_at").notNull().defaultNow(),
+    created_at: ts("created_at").notNull().defaultNow(),
+    updated_at: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+  },
+  (t) => [index("tickets_client_idx").on(t.client_id), index("tickets_status_idx").on(t.status)],
+);
+
+/** `internal` = note de l'admin, jamais montrée au client. */
+export const ticketMessages = pgTable(
+  "ticket_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ticket_id: uuid("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+    author: ticketAuthor("author").notNull(),
+    contact_id: uuid("contact_id").references(() => clientContacts.id, { onDelete: "set null" }),
+    body: text("body").notNull(),
+    internal: boolean("internal").notNull().default(false),
+    created_at: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("ticket_messages_ticket_idx").on(t.ticket_id, t.created_at)],
 );
 
 export const emailMessages = pgTable(

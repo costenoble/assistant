@@ -8,6 +8,8 @@ import { CLIENT_STATUSES, CLIENT_STATUS_LABELS } from "@/lib/db/types";
 import { EmptyState, ItemRow } from "@/components/item-row";
 import { QuickAdd } from "@/components/quick-add";
 import { getClientActivity, getClientOptions } from "@/lib/clients/link";
+import { getClientTickets } from "@/lib/tickets/queries";
+import { TicketList } from "@/components/ticket-list";
 import { formatDay, relative } from "@/lib/time/paris";
 import { addNote, updateClient } from "../actions";
 import { AddContactForm, AddProjectForm, DeleteContactButton, DeleteNoteButton, PortalAccessToggle, ProjectStatusSelect } from "../forms";
@@ -21,12 +23,13 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
 
   const { db } = await requireOwner();
   const now = new Date();
-  const [[client], contacts, projects, activity, clientOptions] = await Promise.all([
+  const [[client], contacts, projects, activity, clientOptions, clientTickets] = await Promise.all([
     db.select().from(clients).where(eq(clients.id, clientId)),
     db.select().from(clientContacts).where(eq(clientContacts.client_id, clientId)).orderBy(asc(clientContacts.created_at)),
     db.select().from(projectsTable).where(eq(projectsTable.client_id, clientId)).orderBy(desc(projectsTable.created_at)),
     getClientActivity(db, clientId),
     getClientOptions(db),
+    getClientTickets(db, clientId),
   ]);
   if (!client) notFound();
 
@@ -82,6 +85,13 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
           </details>
         )}
       </section>
+
+      {clientTickets.length > 0 && (
+        <section className="card overflow-hidden">
+          <h2 className="section-title border-b border-border px-5 py-3">Demandes du client</h2>
+          <TicketList rows={clientTickets} now={now} showClient={false} />
+        </section>
+      )}
 
       <section className="card divide-y divide-border">
         <h2 className="section-title px-5 py-3">Notes internes <span className="font-normal normal-case tracking-normal">· jamais visibles du client</span></h2>

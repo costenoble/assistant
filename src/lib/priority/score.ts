@@ -28,6 +28,11 @@ export interface PriorityInput {
     isBulk?: boolean;
     receivedAt?: string | Date | null;
   } | null;
+  ticket?: {
+    urgent?: boolean;
+    /** Dernier message du client : l'attente court depuis ce moment. */
+    lastClientMessageAt?: string | Date | null;
+  } | null;
 }
 
 export interface PriorityResult {
@@ -181,6 +186,18 @@ export function computePriority(
     else if (delta < -HOUR) add(-100, "RDV passé");
   }
 
+  // 5 bis. Demande d'un client (ticket) : avant les mots-clés, pour que ses raisons s'affichent en premier.
+  if (input.kind === "ticket") {
+    add(25, "Demande client");
+    if (input.ticket?.urgent) add(25, "Signalée bloquante par le client");
+    const asked = toTime(input.ticket?.lastClientMessageAt);
+    if (input.status !== "waiting" && asked != null) {
+      const age = now - asked;
+      if (age > 2 * DAY) add(20, `Client sans réponse depuis ${formatDelay(age)}`);
+      else if (age > 4 * HOUR) add(10, `Client sans réponse depuis ${formatDelay(age)}`);
+    }
+  }
+
   // 6. Mots-clés d'urgence (une seule fois, mots entiers : « rappeler » ≠ « rappel »).
   const haystack = `${input.title} ${input.body ?? ""}`.toLowerCase();
   const keyword = URGENT_KEYWORDS.find((k) => KEYWORD_PATTERNS.get(k)!.test(haystack));
@@ -217,7 +234,7 @@ export function computePriority(
 
   // 9. Tâche qui traîne dans l'inbox sans être triée.
   const created = toTime(input.createdAt);
-  if (input.status === "inbox" && input.kind !== "event" && created != null && now - created > 2 * DAY) {
+  if (input.status === "inbox" && input.kind !== "event" && input.kind !== "ticket" && created != null && now - created > 2 * DAY) {
     add(10, "Pas encore trié");
   }
 

@@ -1,6 +1,8 @@
 import type {
   clientContacts,
   clientNotes,
+  ticketMessages,
+  tickets,
   clients,
   emailMessages,
   items,
@@ -14,7 +16,7 @@ import type {
  * client : il ne doit dépendre de Drizzle que par des `import type`.
  */
 
-export const ITEM_KINDS = ["task", "email", "event", "followup"] as const;
+export const ITEM_KINDS = ["task", "email", "event", "followup", "ticket"] as const;
 export const ITEM_STATUSES = ["inbox", "todo", "in_progress", "waiting", "done", "archived"] as const;
 export const ITEM_CONTEXTS = ["perso", "freelance", "semaphors", "saas"] as const;
 export const PRIORITY_LEVELS = ["critical", "high", "normal", "low"] as const;
@@ -39,6 +41,30 @@ export type Client = typeof clients.$inferSelect;
 export type ClientContact = typeof clientContacts.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type ClientNote = typeof clientNotes.$inferSelect;
+export type Ticket = typeof tickets.$inferSelect;
+export type TicketMessage = typeof ticketMessages.$inferSelect;
+
+// ─── Tickets (demandes des clients) ─────────────────────────────────
+
+export const TICKET_STATUSES = ["open", "in_progress", "waiting_client", "resolved"] as const;
+export type TicketStatus = (typeof TICKET_STATUSES)[number];
+export const TICKET_AUTHORS = ["client", "admin"] as const;
+
+/** Vu par l'admin. */
+export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
+  open: "À traiter",
+  in_progress: "En cours",
+  waiting_client: "En attente du client",
+  resolved: "Résolu",
+};
+
+/** Vu par le client (vouvoiement). */
+export const TICKET_STATUS_LABELS_CLIENT: Record<TicketStatus, string> = {
+  open: "Envoyée",
+  in_progress: "En cours de traitement",
+  waiting_client: "Réponse reçue",
+  resolved: "Résolue",
+};
 /** Ce qu'il faut pour proposer un client dans une liste déroulante. */
 export type ClientOption = { id: string; name: string };
 

@@ -7,6 +7,8 @@ import { parisDayBounds } from "@/lib/time/paris";
 
 const ACTIVE: ItemStatus[] = ["inbox", "todo", "in_progress"];
 const TASK_KINDS = ["task", "followup"] as const;
+/** Ce qui demande une action de ta part dans « À faire maintenant ». */
+const FOCUS_KINDS = [...TASK_KINDS, "ticket"] as const;
 
 /** Items + détail du mail associé (1-1, absent pour les tâches et RDV). */
 function withEmail(db: Db, where: SQL | undefined) {
@@ -35,7 +37,7 @@ export async function getTodayData(db: Db, now = new Date()) {
 
   const [focus, emails, events, tomorrowEvents, waitingCount, overdueCount] = await Promise.all([
     // À faire maintenant : tâches/suivis ouverts, triés par score.
-    withEmail(db, and(inArray(items.kind, TASK_KINDS), inArray(items.status, ACTIVE), notSnoozed(now)))
+    withEmail(db, and(inArray(items.kind, FOCUS_KINDS), inArray(items.status, ACTIVE), notSnoozed(now)))
       .orderBy(desc(items.priority_score), asc(items.due_at))
       .limit(12),
     // Mails à traiter (hors newsletters).

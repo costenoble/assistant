@@ -39,9 +39,10 @@ export function CreateClientForm() {
 }
 
 export function AddContactForm({ clientId }: { clientId: string }) {
-  const [state, action, pending] = useActionState<FormState, FormData>(addContact.bind(null, clientId), null);
+  const [state, action, pending] = useActionState<FormState, FormData>(addContact, null);
   return (
     <form action={action} className="space-y-2">
+      <input type="hidden" name="client_id" value={clientId} />
       <div className="grid gap-2 sm:grid-cols-[2fr_2fr_1fr_1fr_auto]">
         <input name="full_name" required placeholder="Nom" className="input" />
         <input name="email" type="email" placeholder="Email" className="input" />
@@ -99,9 +100,10 @@ export function DeleteNoteButton({ noteId, clientId }: { noteId: string; clientI
 }
 
 export function AddProjectForm({ clientId }: { clientId: string }) {
-  const [state, action, pending] = useActionState<FormState, FormData>(addProject.bind(null, clientId), null);
+  const [state, action, pending] = useActionState<FormState, FormData>(addProject, null);
   return (
     <form action={action} className="space-y-2">
+      <input type="hidden" name="client_id" value={clientId} />
       <div className="grid gap-2 sm:grid-cols-[2fr_3fr_auto_auto]">
         <input name="name" required placeholder="Nom du projet" className="input" />
         <input name="description" placeholder="Description (visible par le client)" className="input" />
