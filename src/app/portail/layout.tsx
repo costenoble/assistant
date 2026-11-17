@@ -10,7 +10,7 @@ export default async function PortalLayout({ children }: { children: React.React
   const { contact, clients } = await requireClient();
   return (
     <div className="min-h-dvh bg-bg">
-      <header className="border-b border-border bg-surface">
+      <header className="border-b border-border bg-surface pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6">
           <Link href="/portail" className="flex items-center gap-3">
             <span className="text-accent"><LogoMark /></span>

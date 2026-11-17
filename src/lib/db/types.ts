@@ -8,6 +8,7 @@ import type {
   items,
   mailRules,
   meetings,
+  notifications,
   projects,
   sources,
 } from "./schema";
@@ -44,6 +45,7 @@ export type Project = typeof projects.$inferSelect;
 export type ClientNote = typeof clientNotes.$inferSelect;
 export type Ticket = typeof tickets.$inferSelect;
 export type Meeting = typeof meetings.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
 export type TicketMessage = typeof ticketMessages.$inferSelect;
 
 // ─── Tickets (demandes des clients) ─────────────────────────────────

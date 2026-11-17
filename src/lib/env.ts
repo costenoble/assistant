@@ -84,3 +84,15 @@ export function smtpConfig() {
 export function anthropicKey(): string | null {
   return process.env.ANTHROPIC_API_KEY || process.env.API_KEY || null;
 }
+
+/**
+ * Clés VAPID des notifications sur téléphone (`npx web-push generate-vapid-keys`).
+ * Facultatives : sans elles, la cloche marche mais rien n'est envoyé aux appareils.
+ */
+export function pushConfig(): { publicKey: string; privateKey: string; subject: string } | null {
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  if (!publicKey || !privateKey) return null;
+  // Identifiant d'expéditeur transmis aux services de notification (Apple, Google) : l'adresse de l'app, pas un email perso.
+  return { publicKey, privateKey, subject: process.env.VAPID_SUBJECT || process.env.NEXT_PUBLIC_APP_URL || "https://localhost" };
+}

@@ -1,4 +1,5 @@
 import "server-only";
+import { notify } from "@/lib/notifications/service";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@/lib/db";
 import { clientContacts, clients, projects } from "@/lib/db/schema";
@@ -62,6 +63,14 @@ export async function notifyOwnerOfClientMessage(
     quote: kind === "validated" ? undefined : excerpt(body),
     link: { url: `${env().NEXT_PUBLIC_APP_URL}/tickets/${ticket.id}`, label: isTask(ticket) ? "Ouvrir la tâche" : "Ouvrir le ticket" },
     kind: "ticket-owner",
+  });
+  // Cloche dans l'app + notification sur le téléphone.
+  await notify(db, {
+    kind: `client_${kind}`,
+    title: `${what} — ${ticket.subject}`,
+    body: kind === "validated" ? `${who} a validé.` : `${who} : ${excerpt(body).slice(0, 180)}`,
+    url: `/tickets/${ticket.id}`,
+    tag: `ticket-${ticket.id}`,
   });
 }
 

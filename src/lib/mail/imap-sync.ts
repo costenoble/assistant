@@ -1,7 +1,8 @@
 import "server-only";
 import { ImapFlow, type FetchMessageObject } from "imapflow";
 import { simpleParser } from "mailparser";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { notify } from "@/lib/notifications/service";
 import type { Db } from "@/lib/db";
 import { emailMessages, items, mailRules, syncState } from "@/lib/db/schema";
 import type { MailAccount } from "@/lib/env";
@@ -162,6 +163,7 @@ async function syncMailbox(
 
     // 3. Écriture des items puis des détails mail.
     const ids = await upsertItems(db, ctx.source, incoming);
+    const newIds = [...ids.values()];
     const byItem = new Map<string, EmailRow>();
     emailRows.forEach((row, i) => {
       const itemId = ids.get(incoming[i]!.external_id);
@@ -185,6 +187,24 @@ async function syncMailbox(
             is_bulk: sql`excluded.is_bulk`,
           },
         });
+    }
+
+    // 3 bis. Nouveau mail critique (client VIP, urgence…) : notification sur le téléphone.
+    if (newIds.length) {
+      const urgent = await db
+        .select({ id: items.id, title: items.title, metadata: items.metadata })
+        .from(items)
+        .where(
+          and(
+            inArray(items.id, newIds),
+            eq(items.priority_level, "critical"),
+            eq(items.status, "inbox"),
+            gte(items.created_at, sql`now() - interval '10 minutes'`), // nouveau, pas un mail déjà connu revu
+          ),
+        );
+      for (const m of urgent) {
+        await notify(db, { kind: "urgent_mail", title: `Mail urgent · ${String(m.metadata.from ?? "")}`.trim(), body: m.title, url: `/inbox/${m.id}`, tag: `mail-${m.id}` });
+      }
     }
 
     // 4. Rafraîchissement des flags récents (réponses envoyées ailleurs).
