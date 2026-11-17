@@ -56,7 +56,16 @@ export function NewRequestForm({
   );
 }
 
-export function NewTaskForm({ projectId }: { projectId: string }) {
+export function NewTaskForm({
+  workspaceId,
+  projectId,
+  projects = [],
+}: {
+  workspaceId: string;
+  /** Projet imposé (page d'un projet). Sinon, choix parmi `projects`. */
+  projectId?: string;
+  projects?: { id: string; name: string }[];
+}) {
   const ref = useRef<HTMLFormElement>(null);
   const [state, action, pending] = useActionState<PortalFormState, FormData>(createTask, null);
   useEffect(() => {
@@ -64,7 +73,8 @@ export function NewTaskForm({ projectId }: { projectId: string }) {
   }, [state]);
   return (
     <form ref={ref} action={action} className="space-y-3">
-      <input type="hidden" name="project_id" value={projectId} />
+      <input type="hidden" name="workspace_id" value={workspaceId} />
+      {projectId && <input type="hidden" name="project_id" value={projectId} />}
       <div className="space-y-1">
         <label htmlFor="task-subject" className="text-sm font-medium">Nouvelle tâche</label>
         <input id="task-subject" name="subject" required maxLength={200} placeholder="Ex. Ajouter un export CSV sur l'écran des plannings" className="input w-full" />
@@ -72,10 +82,21 @@ export function NewTaskForm({ projectId }: { projectId: string }) {
       <label htmlFor="task-body" className="sr-only">Détail</label>
       <textarea id="task-body" name="body" rows={3} placeholder="Détail, contexte, ce que vous attendez exactement (facultatif)" className="input w-full resize-y" />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="urgent" />
-          C&apos;est prioritaire
-        </label>
+        <div className="flex flex-wrap items-center gap-4">
+          {!projectId && projects.length > 0 && (
+            <label className="flex items-center gap-2 text-sm">
+              Projet
+              <select name="project_id" defaultValue="" className="input h-9 py-0">
+                <option value="">Aucun</option>
+                {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </label>
+          )}
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="urgent" />
+            C&apos;est urgent
+          </label>
+        </div>
         <button className="btn-primary" disabled={pending}>{pending ? "Envoi…" : "Ajouter la tâche"}</button>
       </div>
       <Error state={state} />

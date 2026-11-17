@@ -45,7 +45,7 @@ export default async function PortalProjectPage({ params }: { params: Promise<{ 
       )}
 
       <section className="card p-5">
-        <NewTaskForm projectId={project.id} />
+        <NewTaskForm workspaceId={project.client_id} projectId={project.id} />
       </section>
 
       <section aria-labelledby="encours-h" className="space-y-3">

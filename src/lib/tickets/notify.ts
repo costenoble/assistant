@@ -136,3 +136,23 @@ export async function sendPortalInvitation(contact: { email: string; full_name: 
     kind: "invitation",
   });
 }
+
+/** Au contact à qui l'admin assigne une tâche. */
+export async function notifyAssignee(db: Db, ticket: Ticket) {
+  if (!ticket.assignee_contact_id) return;
+  const [[contact], ctx] = await Promise.all([
+    db
+      .select({ email: clientContacts.email, name: clientContacts.full_name, portal: clientContacts.portal_access })
+      .from(clientContacts)
+      .where(eq(clientContacts.id, ticket.assignee_contact_id)),
+    context(db, ticket),
+  ]);
+  if (!contact?.email || !contact.portal) return;
+  await safeSend({
+    to: contact.email,
+    subject: `${ctx.project ? `[${ctx.project}] ` : ""}Une tâche vous est assignée : ${ticket.subject}`,
+    paragraphs: [`Bonjour ${contact.name.split(" ")[0]},`, `La tâche « ${ticket.subject} » vous est maintenant assignée.`],
+    link: { url: `${env().NEXT_PUBLIC_APP_URL}/portail/demandes/${ticket.id}`, label: "Ouvrir la tâche" },
+    kind: "ticket-client",
+  });
+}

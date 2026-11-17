@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -24,9 +25,12 @@ import {
   RULE_ACTIONS,
   RULE_MATCHES,
   SOURCE_KINDS,
+  TASK_PRIORITIES,
   TICKET_AUTHORS,
   TICKET_KINDS,
   TICKET_STATUSES,
+  WORKSPACE_COLORS,
+  WORKSPACE_KINDS,
 } from "./types";
 
 /**
@@ -50,6 +54,9 @@ export const projectStatus = pgEnum("project_status", PROJECT_STATUSES);
 export const ticketStatus = pgEnum("ticket_status", TICKET_STATUSES);
 export const ticketAuthor = pgEnum("ticket_author", TICKET_AUTHORS);
 export const ticketKind = pgEnum("ticket_kind", TICKET_KINDS);
+export const taskPriority = pgEnum("task_priority", TASK_PRIORITIES);
+export const workspaceKind = pgEnum("workspace_kind", WORKSPACE_KINDS);
+export const workspaceColor = pgEnum("workspace_color", WORKSPACE_COLORS);
 
 // ─── Clients, contacts, projets ─────────────────────────────────────
 
@@ -61,6 +68,9 @@ export const clients = pgTable("clients", {
   website: text("website"),
   /** Domaines mail du client (ex. boulangerie-martin.fr) : rattachement auto des mails. */
   email_domains: text("email_domains").array().notNull().default(sql`'{}'::text[]`),
+  // Chaque client est aussi un espace de travail ; « internal » = espace sans client (perso, SaaS).
+  kind: workspaceKind("kind").notNull().default("client"),
+  color: workspaceColor("color").notNull().default("blue"),
   created_at: ts("created_at").notNull().defaultNow(),
   updated_at: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -181,7 +191,17 @@ export const tickets = pgTable(
     contact_id: uuid("contact_id").references(() => clientContacts.id, { onDelete: "set null" }), // auteur
     item_id: uuid("item_id").unique().references(() => items.id, { onDelete: "set null" }),
     subject: text("subject").notNull(),
+    /** Description d'une tâche (les échanges sont dans ticket_messages). */
+    description: text("description"),
     status: ticketStatus("status").notNull().default("open"),
+    priority: taskPriority("priority").notNull().default("none"),
+    /** Assigné : toi (assigned_to_owner) ou un contact du client ; personne si les deux sont vides. */
+    assigned_to_owner: boolean("assigned_to_owner").notNull().default(false),
+    assignee_contact_id: uuid("assignee_contact_id").references(() => clientContacts.id, { onDelete: "set null" }),
+    due_on: date("due_on"),
+    labels: text("labels").array().notNull().default(sql`'{}'::text[]`),
+    /** Ordre dans une colonne du tableau (plus petit = plus haut). */
+    position: doublePrecision("position").notNull().default(0),
     urgent: boolean("urgent").notNull().default(false), // « bloquant » coché par le client
     last_client_message_at: ts("last_client_message_at"),
     last_message_at: ts("last_message_at").notNull().defaultNow(),

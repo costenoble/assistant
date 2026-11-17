@@ -30,6 +30,7 @@ export interface PriorityInput {
   } | null;
   ticket?: {
     kind?: "request" | "task";
+    priority?: "none" | "low" | "medium" | "high" | "urgent";
     /** Créé par un contact du client (et non par l'admin). */
     fromClient?: boolean;
     urgent?: boolean;
@@ -193,7 +194,11 @@ export function computePriority(
   if (input.kind === "ticket") {
     if (input.ticket?.kind === "task") add(input.ticket.fromClient ? 25 : 10, input.ticket.fromClient ? "Tâche confiée par le client" : "Tâche du projet");
     else add(25, "Demande client");
-    if (input.ticket?.urgent) add(25, "Signalée bloquante par le client");
+    const priority = input.ticket?.priority ?? "none";
+    if (input.ticket?.kind === "task" && priority !== "none") {
+      const pts = { low: 0, medium: 10, high: 25, urgent: 40 }[priority];
+      add(pts, `Priorité ${({ low: "basse", medium: "moyenne", high: "haute", urgent: "urgente" } as const)[priority]}`);
+    } else if (input.ticket?.urgent) add(25, "Signalée bloquante par le client");
     const asked = toTime(input.ticket?.lastClientMessageAt);
     if (input.status !== "waiting" && asked != null) {
       const age = now - asked;

@@ -23,6 +23,8 @@ function since(d: Date, now: Date) {
 }
 
 const STATUS_STYLE: Record<TicketStatus, string> = {
+  backlog: "bg-surface-2 text-muted",
+  canceled: "bg-surface-2 text-muted line-through",
   open: "bg-critical/15 text-critical",
   in_progress: "bg-accent/15 text-accent",
   waiting_client: "bg-surface-2 text-muted",

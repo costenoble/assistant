@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db";
 import { clientContacts, clients, projects, ticketMessages, tickets } from "@/lib/db/schema";
+import { selectTasks, type TaskCard } from "@/lib/workspaces/queries";
 
 /**
  * Qui a accès à quoi. C'est LE point de passage du portail : toute lecture
@@ -61,6 +62,13 @@ const portalTicketColumns = {
   number: tickets.number,
   kind: tickets.kind,
   subject: tickets.subject,
+  description: tickets.description,
+  priority: tickets.priority,
+  due_on: tickets.due_on,
+  labels: tickets.labels,
+  assigned_to_owner: tickets.assigned_to_owner,
+  assignee_contact_id: tickets.assignee_contact_id,
+  assignee_name: sql<string | null>`(select c.full_name from client_contacts c where c.id = ${tickets.assignee_contact_id})`,
   status: tickets.status,
   urgent: tickets.urgent,
   client_id: tickets.client_id,
@@ -146,4 +154,26 @@ export async function resolvePortalTicketTarget(
   const clientId = wanted.clientId ?? (clientIds.length === 1 ? clientIds[0]! : null);
   if (!clientId || !clientIds.includes(clientId)) return null;
   return { clientId, projectId: null };
+}
+
+// ─── Espaces de travail ──────────────────────────────────────────────
+
+/**
+ * Un espace vu par un membre : ses projets publiés, ses tâches hors projets en
+ * brouillon, et les membres (noms seulement). null si ce n'est pas l'un de ses espaces.
+ */
+export async function getPortalWorkspace(db: Db, clientIds: string[], workspaceId: string) {
+  if (!clientIds.includes(workspaceId)) return null;
+  const [[workspace], visibleProjects, members] = await Promise.all([
+    db.select({ id: clients.id, name: clients.name, color: clients.color }).from(clients).where(eq(clients.id, workspaceId)),
+    getPortalProjects(db, [workspaceId]),
+    db
+      .select({ id: clientContacts.id, name: clientContacts.full_name })
+      .from(clientContacts)
+      .where(and(eq(clientContacts.client_id, workspaceId), eq(clientContacts.portal_access, true)))
+      .orderBy(asc(clientContacts.full_name)),
+  ]);
+  if (!workspace) return null;
+  const tasks = (await selectTasks(db, workspaceId, or(isNull(tickets.project_id), ne(projects.status, "draft")))) as TaskCard[];
+  return { workspace, projects: visibleProjects, members, tasks };
 }

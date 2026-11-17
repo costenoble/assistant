@@ -1,8 +1,9 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db";
 import { items, ticketMessages, tickets } from "@/lib/db/schema";
-import type { ItemStatus, Ticket, TicketKind, TicketMessage, TicketStatus } from "@/lib/db/types";
+import type { ItemStatus, TaskPriority, Ticket, TicketKind, TicketMessage, TicketStatus } from "@/lib/db/types";
+import { fromParis } from "@/lib/time/paris";
 import { recomputeOne } from "@/lib/items/repo";
 
 /**
@@ -14,11 +15,27 @@ import { recomputeOne } from "@/lib/items/repo";
  */
 
 const ITEM_STATUS: Record<TicketStatus, ItemStatus> = {
+  backlog: "waiting", // pas maintenant : hors de « À faire maintenant »
   open: "todo",
   in_progress: "in_progress",
   waiting_client: "waiting",
   resolved: "done",
+  canceled: "archived",
 };
+
+/** Statut de l'item miroir : une tâche assignée à quelqu'un d'autre que toi attend ce quelqu'un. */
+function itemStatusFor(t: Ticket): ItemStatus {
+  const status = ITEM_STATUS[t.status];
+  const someoneElse = t.kind === "task" && !t.assigned_to_owner && t.assignee_contact_id !== null;
+  return someoneElse && (status === "todo" || status === "in_progress") ? "waiting" : status;
+}
+
+/** Échéance d'une tâche (une date) → 18 h, heure de Paris, pour le moteur de priorité. */
+function dueAt(dueOn: string | null): Date | null {
+  if (!dueOn) return null;
+  const [y, m, d] = dueOn.split("-").map(Number);
+  return fromParis(y!, m!, d!, 18, 0);
+}
 
 export const ticketTitle = (t: Pick<Ticket, "number" | "subject">) => `#${t.number} · ${t.subject}`;
 
@@ -27,7 +44,8 @@ async function syncItem(db: Db, ticket: Ticket, excerpt?: string) {
   const fields = {
     kind: "ticket" as const,
     context: "freelance" as const,
-    status: ITEM_STATUS[ticket.status],
+    status: itemStatusFor(ticket),
+    due_at: dueAt(ticket.due_on),
     title: ticketTitle(ticket).slice(0, 500),
     url: `/tickets/${ticket.id}`,
     client_id: ticket.client_id,
@@ -45,9 +63,51 @@ async function syncItem(db: Db, ticket: Ticket, excerpt?: string) {
   await recomputeOne(db, itemId);
 }
 
+/** Champs d'une tâche façon Linear (optionnels à la création). */
+export interface TaskFields {
+  status?: TicketStatus;
+  priority?: TaskPriority;
+  description?: string | null;
+  /** "owner" = toi ; un id de contact ; null = personne. */
+  assignee?: "owner" | string | null;
+  dueOn?: string | null;
+  labels?: string[];
+  projectId?: string | null;
+}
+
+/** Colonnes de tickets correspondant à une modification de tâche. */
+function taskColumns(f: TaskFields) {
+  const cols: Partial<typeof tickets.$inferInsert> = {};
+  if (f.status !== undefined) cols.status = f.status;
+  if (f.priority !== undefined) {
+    cols.priority = f.priority;
+    cols.urgent = f.priority === "urgent";
+  }
+  if (f.description !== undefined) cols.description = f.description;
+  if (f.assignee !== undefined) {
+    cols.assigned_to_owner = f.assignee === "owner";
+    cols.assignee_contact_id = f.assignee && f.assignee !== "owner" ? f.assignee : null;
+  }
+  if (f.dueOn !== undefined) cols.due_on = f.dueOn;
+  if (f.labels !== undefined) cols.labels = [...new Set(f.labels.map((l) => l.trim().toLowerCase()).filter(Boolean))].slice(0, 10);
+  if (f.projectId !== undefined) cols.project_id = f.projectId;
+  return cols;
+}
+
+/** Position en bas d'une colonne du tableau. */
+async function nextPosition(db: Db, clientId: string, status: TicketStatus) {
+  const [row] = await db
+    .select({ max: sql<number | null>`max(${tickets.position})` })
+    .from(tickets)
+    .where(and(eq(tickets.client_id, clientId), eq(tickets.status, status)));
+  return (row?.max ?? 0) + 1;
+}
+
 export interface NewTicket {
-  /** request (défaut) = demande au support ; task = tâche partagée d'un projet (projectId requis). */
+  /** request (défaut) = demande au support ; task = tâche d'un espace de travail. */
   kind?: TicketKind;
+  /** Propriétés d'une tâche (statut initial, priorité, assigné…). */
+  task?: TaskFields;
   clientId: string;
   projectId?: string | null;
   /** Contact auteur (portail). Absent quand l'admin ouvre le ticket. */
@@ -60,8 +120,21 @@ export interface NewTicket {
 
 export async function createTicket(db: Db, input: NewTicket): Promise<Ticket> {
   const kind = input.kind ?? "request";
-  if (kind === "task" && !input.projectId) throw new Error("Une tâche appartient à un projet");
   const now = new Date();
+  // Demande ouverte par l'admin pour le client : la balle est dans le camp du client.
+  const status: TicketStatus =
+    input.task?.status ?? (input.author === "client" || kind === "task" ? "open" : "waiting_client");
+  // Une tâche est à toi par défaut (c'est à toi qu'on la confie) ; « bloquant » = priorité urgente.
+  // Pour une tâche, le texte de départ est sa description ; le fil ne contient que les échanges.
+  const extra =
+    kind === "task"
+      ? taskColumns({
+          assignee: "owner",
+          ...(input.urgent ? { priority: "urgent" as const } : {}),
+          ...input.task,
+          description: input.task?.description ?? (input.body.trim() || null),
+        })
+      : {};
   const [ticket] = await db
     .insert(tickets)
     .values({
@@ -71,19 +144,21 @@ export async function createTicket(db: Db, input: NewTicket): Promise<Ticket> {
       contact_id: input.contactId ?? null,
       subject: input.subject.slice(0, 200),
       urgent: input.urgent ?? false,
-      // Demande ouverte par l'admin pour le client : la balle est dans le camp du client.
-      // Tâche créée par l'admin : c'est lui qui la fait.
-      status: input.author === "client" || kind === "task" ? "open" : "waiting_client",
+      status,
+      position: await nextPosition(db, input.clientId, status),
+      ...extra,
       last_client_message_at: input.author === "client" ? now : null,
       last_message_at: now,
     })
     .returning();
-  await db.insert(ticketMessages).values({
-    ticket_id: ticket!.id,
-    author: input.author,
-    contact_id: input.contactId ?? null,
-    body: input.body,
-  });
+  if (kind === "request") {
+    await db.insert(ticketMessages).values({
+      ticket_id: ticket!.id,
+      author: input.author,
+      contact_id: input.contactId ?? null,
+      body: input.body,
+    });
+  }
   await syncItem(db, ticket!, input.body);
   return (await getTicketRow(db, ticket!.id))!;
 }
@@ -154,9 +229,30 @@ export async function clientValidateTask(db: Db, ticketId: string, contactId: st
 }
 
 export async function setTicketStatus(db: Db, ticketId: string, status: TicketStatus): Promise<Ticket | null> {
-  const [updated] = await db.update(tickets).set({ status }).where(eq(tickets.id, ticketId)).returning();
-  if (updated) await syncItem(db, updated);
-  return updated ?? null;
+  return updateTask(db, ticketId, { status });
+}
+
+/** Modifie les propriétés d'une tâche (ou le statut d'une demande) et resynchronise le flux. */
+export async function updateTask(db: Db, ticketId: string, fields: TaskFields & { subject?: string }): Promise<Ticket | null> {
+  const before = await getTicketRow(db, ticketId);
+  if (!before) return null;
+  const cols = taskColumns(fields);
+  if (fields.subject !== undefined) cols.subject = fields.subject.slice(0, 200);
+  // Changement de colonne sans position donnée : en bas de la nouvelle colonne.
+  if (fields.status !== undefined && fields.status !== before.status) cols.position = await nextPosition(db, before.client_id, fields.status);
+  if (!Object.keys(cols).length) return before;
+  const [updated] = await db.update(tickets).set(cols).where(eq(tickets.id, ticketId)).returning();
+  await syncItem(db, updated!);
+  return updated!;
+}
+
+/** Glisser-déposer : nouvelle colonne et position (entre ses voisines). */
+export async function moveTask(db: Db, ticketId: string, status: TicketStatus, position: number): Promise<Ticket | null> {
+  const before = await getTicketRow(db, ticketId);
+  if (!before) return null;
+  const [updated] = await db.update(tickets).set({ status, position }).where(eq(tickets.id, ticketId)).returning();
+  await syncItem(db, updated!);
+  return updated!;
 }
 
 export async function getTicketRow(db: Db, ticketId: string): Promise<Ticket | null> {

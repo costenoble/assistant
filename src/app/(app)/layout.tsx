@@ -35,7 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <NavLink href="/" label="Aujourd'hui" count={counts.urgentTasks} alert />
             <NavLink href="/inbox" label="Mails" count={counts.inbox} />
             <NavLink href="/taches" label="Tâches" />
-            <NavLink href="/projets" label="Projets" count={openTasks} />
+            <NavLink href="/espaces" label="Espaces" count={openTasks} />
             <NavLink href="/tickets" label="Tickets" count={openTickets} alert />
             <NavLink href="/clients" label="Clients" />
             <NavLink href="/reglages" label="Réglages" />

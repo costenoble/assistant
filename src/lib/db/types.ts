@@ -46,7 +46,7 @@ export type TicketMessage = typeof ticketMessages.$inferSelect;
 
 // ─── Tickets (demandes des clients) ─────────────────────────────────
 
-export const TICKET_STATUSES = ["open", "in_progress", "waiting_client", "resolved"] as const;
+export const TICKET_STATUSES = ["backlog", "open", "in_progress", "waiting_client", "resolved", "canceled"] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 export const TICKET_AUTHORS = ["client", "admin"] as const;
 /** request = demande au support ; task = tâche partagée d'un projet. */
@@ -55,19 +55,44 @@ export type TicketKind = (typeof TICKET_KINDS)[number];
 
 /** Tâches de projet, vues par l'admin. */
 export const TASK_STATUS_LABELS: Record<TicketStatus, string> = {
-  open: "À faire",
-  in_progress: "En cours",
-  waiting_client: "À valider (client)",
-  resolved: "Fait",
-};
-
-/** Tâches de projet, vues par le client. */
-export const TASK_STATUS_LABELS_CLIENT: Record<TicketStatus, string> = {
+  backlog: "Backlog",
   open: "À faire",
   in_progress: "En cours",
   waiting_client: "À valider",
   resolved: "Fait",
+  canceled: "Annulé",
 };
+
+/** Tâches de projet, vues par le client. */
+export const TASK_STATUS_LABELS_CLIENT: Record<TicketStatus, string> = {
+  backlog: "Backlog",
+  open: "À faire",
+  in_progress: "En cours",
+  waiting_client: "À valider",
+  resolved: "Fait",
+  canceled: "Annulée",
+};
+
+/** Colonnes du tableau, dans l'ordre (« Annulé » reste dans la vue liste). */
+export const BOARD_STATUSES = ["backlog", "open", "in_progress", "waiting_client", "resolved"] as const satisfies readonly TicketStatus[];
+
+/** Priorité d'une tâche, façon Linear. */
+export const TASK_PRIORITIES = ["none", "low", "medium", "high", "urgent"] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
+  none: "Sans priorité",
+  low: "Basse",
+  medium: "Moyenne",
+  high: "Haute",
+  urgent: "Urgente",
+};
+
+/** Espace interne (perso, SaaS) ou espace d'un client. */
+export const WORKSPACE_KINDS = ["client", "internal"] as const;
+export type WorkspaceKind = (typeof WORKSPACE_KINDS)[number];
+/** Couleurs d'espace proposées (pastilles, en-têtes). */
+export const WORKSPACE_COLORS = ["blue", "violet", "green", "orange", "pink", "teal", "slate"] as const;
+export type WorkspaceColor = (typeof WORKSPACE_COLORS)[number];
 
 export const statusLabel = (kind: TicketKind, status: TicketStatus, viewer: "admin" | "client") =>
   (kind === "task"
@@ -76,6 +101,8 @@ export const statusLabel = (kind: TicketKind, status: TicketStatus, viewer: "adm
 
 /** Vu par l'admin. */
 export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
+  backlog: "Plus tard",
+  canceled: "Annulé",
   open: "À traiter",
   in_progress: "En cours",
   waiting_client: "En attente du client",
@@ -84,6 +111,8 @@ export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
 
 /** Vu par le client (vouvoiement). */
 export const TICKET_STATUS_LABELS_CLIENT: Record<TicketStatus, string> = {
+  backlog: "Plus tard",
+  canceled: "Annulée",
   open: "Envoyée",
   in_progress: "En cours de traitement",
   waiting_client: "Réponse reçue",

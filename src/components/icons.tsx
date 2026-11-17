@@ -28,6 +28,9 @@ export const IconArrowLeft = ({ className }: P) => <svg {...base(className)}><pa
 export const IconLock = ({ className }: P) => <svg {...base(className)}><rect x="3" y="7" width="10" height="7" rx="1.5" /><path d="M5.5 7V5a2.5 2.5 0 015 0v2" /></svg>;
 export const IconEye = ({ className }: P) => <svg {...base(className)}><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></svg>;
 export const IconExternal = ({ className }: P) => <svg {...base(className)}><path d="M9 3h4v4M13 3L7.5 8.5M11 9.5V13H3V5h3.5" /></svg>;
+export const IconComment = ({ className }: P) => <svg {...base(className)}><path d="M3 3.5h10v7H7l-3 2.5v-2.5H3z" /></svg>;
+export const IconBoard = ({ className }: P) => <svg {...base(className)}><rect x="2" y="2.5" width="3.5" height="11" rx="1" /><rect x="6.25" y="2.5" width="3.5" height="7" rx="1" /><rect x="10.5" y="2.5" width="3.5" height="9" rx="1" /></svg>;
+export const IconList = ({ className }: P) => <svg {...base(className)}><path d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01" /></svg>;
 export const IconLogout = ({ className }: P) => <svg {...base(className)}><path d="M6 14H3.5a1 1 0 01-1-1V3a1 1 0 011-1H6M10.5 11L13.5 8l-3-3M13.5 8H6" /></svg>;
 
 /** Marque Cockpit : un cadran. */
