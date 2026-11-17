@@ -1,8 +1,6 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { anthropicKey } from "@/lib/env";
+import { askClaude } from "@/lib/ai/claude";
 import { TASK_PRIORITIES, type MeetingProposal } from "@/lib/db/types";
 
 /**
@@ -10,8 +8,6 @@ import { TASK_PRIORITIES, type MeetingProposal } from "@/lib/db/types";
  * Claude répond en JSON contraint par un schéma ; les noms de personnes et de
  * projets sont ensuite rapprochés des membres et projets de l'espace (mapAnalysis).
  */
-
-export const MODEL = "claude-opus-5-5";
 
 export const AnalysisSchema = z.object({
   title: z.string().describe("Titre court de la réunion, 3 à 8 mots"),
@@ -113,36 +109,8 @@ export function mapAnalysis(a: Analysis, ctx: AnalysisContext): { title: string;
   };
 }
 
-export class AnalysisError extends Error {}
-
-/** Appel à Claude. Lève AnalysisError avec un message lisible par l'utilisateur. */
+/** Appel à Claude (effort high : analyse fidèle d'un long texte). Lève AiError avec un message lisible. */
 export async function analyzeTranscript(transcript: string, ctx: AnalysisContext) {
-  const apiKey = anthropicKey();
-  if (!apiKey) throw new AnalysisError("La clé de l'API Claude n'est pas configurée (ANTHROPIC_API_KEY).");
-  const client = new Anthropic({ apiKey });
-  let response;
-  try {
-    // Non streamé : la sortie reste courte (16k tokens max) ; la page autorise 5 minutes.
-    response = await client.beta.messages.parse({
-      model: MODEL,
-      max_tokens: 16000,
-      // Analyse fidèle d'un long texte : un peu plus de réflexion que le défaut (medium).
-      output_config: { effort: "high", format: betaZodOutputFormat(AnalysisSchema) },
-      // Si un filtre de sécurité refuse la demande (faux positif), l'API la relance sur un autre modèle.
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      system: SYSTEM,
-      messages: [{ role: "user", content: buildUserPrompt(transcript, ctx) }],
-    });
-  } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) throw new AnalysisError("Clé de l'API Claude refusée : vérifie ANTHROPIC_API_KEY.");
-    if (err instanceof Anthropic.RateLimitError) throw new AnalysisError("Trop de demandes à Claude pour l'instant : réessaie dans une minute.");
-    if (err instanceof Anthropic.BadRequestError) throw new AnalysisError(`Demande refusée par l'API Claude : ${err.message}`);
-    if (err instanceof Anthropic.APIError) throw new AnalysisError(`Erreur de l'API Claude (${err.status ?? "réseau"}). Réessaie.`);
-    throw err;
-  }
-  if (response.stop_reason === "refusal") throw new AnalysisError("Claude a refusé d'analyser cette transcription.");
-  if (response.stop_reason === "max_tokens") throw new AnalysisError("Réponse de Claude tronquée : la réunion est peut-être trop longue.");
-  if (!response.parsed_output) throw new AnalysisError("Réponse de Claude illisible. Réessaie.");
-  return mapAnalysis(response.parsed_output, ctx);
+  const analysis = await askClaude({ schema: AnalysisSchema, system: SYSTEM, prompt: buildUserPrompt(transcript, ctx), effort: "high" });
+  return mapAnalysis(analysis, ctx);
 }

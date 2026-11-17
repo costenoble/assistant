@@ -6,13 +6,19 @@ import { getClientOptions } from "@/lib/clients/link";
 import { QuickAdd } from "@/components/quick-add";
 import { formatLongDay, formatTime } from "@/lib/time/paris";
 import type { Item } from "@/lib/db/types";
+import { aiAvailable } from "@/lib/ai/claude";
+import { getTodayBrief } from "@/lib/ai/assistant";
+import { MorningBrief } from "@/components/assistant/brief";
 
 export const dynamic = "force-dynamic";
+// Brouillons et idées de Claude : jusqu'à une vingtaine de secondes.
+export const maxDuration = 120;
 
 export default async function TodayPage() {
   const { db } = await requireOwner();
   const now = new Date();
-  const [data, clients] = await Promise.all([getTodayData(db, now), getClientOptions(db)]);
+  const ai = aiAvailable();
+  const [data, clients, brief] = await Promise.all([getTodayData(db, now), getClientOptions(db), ai ? getTodayBrief(db) : Promise.resolve(null)]);
   const nextEvent = data.events.find((e) => e.ends_at && new Date(e.ends_at) > now);
 
   return (
@@ -34,6 +40,8 @@ export default async function TodayPage() {
           {data.waitingCount > 0 && <Stat value={data.waitingCount} label="en attente" />}
         </ul>
       </header>
+
+      {ai && <MorningBrief initial={brief} />}
 
       <QuickAdd />
 

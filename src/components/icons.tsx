@@ -33,6 +33,8 @@ export const IconBoard = ({ className }: P) => <svg {...base(className)}><rect x
 export const IconList = ({ className }: P) => <svg {...base(className)}><path d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01" /></svg>;
 export const IconPaperclip = ({ className }: P) => <svg {...base(className)}><path d="M10.5 4.5 5.8 9.2a1.5 1.5 0 0 0 2.1 2.1l5-5a3 3 0 0 0-4.2-4.2l-5 5a4.5 4.5 0 0 0 6.4 6.4l4.2-4.2" /></svg>;
 export const IconImage = ({ className }: P) => <svg {...base(className)}><rect x="2" y="3" width="12" height="10" rx="1.5" /><circle cx="5.5" cy="6.5" r="1" /><path d="m3 12 3.5-3.5 2.5 2.5 2-2L14 12" /></svg>;
+export const IconSparkle = ({ className }: P) => <svg {...base(className)}><path d="M8 1.8 9.3 6l4.2 1.3-4.2 1.3L8 12.8 6.7 8.6 2.5 7.3 6.7 6zM13 11.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z" /></svg>;
+export const IconSend = ({ className }: P) => <svg {...base(className)}><path d="M2.5 8 13.5 2.5 10 13.5 7.5 8.5z" /><path d="M7.5 8.5 13.5 2.5" /></svg>;
 export const IconLogout = ({ className }: P) => <svg {...base(className)}><path d="M6 14H3.5a1 1 0 01-1-1V3a1 1 0 011-1H6M10.5 11L13.5 8l-3-3M13.5 8H6" /></svg>;
 
 /** Marque Cockpit : un cadran. */

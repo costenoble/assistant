@@ -1,3 +1,5 @@
+import { aiAvailable, getWritingStyle } from "@/lib/ai/claude";
+import { WritingStyleForm } from "./style-form";
 import { requireOwner } from "@/lib/auth/require-owner";
 import { getSources } from "@/lib/items/queries";
 import { mailRules } from "@/lib/db/schema";
@@ -32,11 +34,22 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     getMicrosoftAccount(db), // jamais les jetons : seulement l'adresse du compte
   ]);
   const accounts = mailAccounts();
+  const style = await getWritingStyle(db);
   const appUrl = env().NEXT_PUBLIC_APP_URL;
 
   return (
     <div className="max-w-4xl space-y-8">
       <h1 className="page-title">Réglages</h1>
+
+      {/* ─── Assistant IA ─── */}
+      <section className="card space-y-3 p-5">
+        <h2 className="section-title">Assistant IA · ton et signature</h2>
+        <p className="text-sm text-muted">
+          Décris comment tu écris : Claude s&apos;en sert pour chaque brouillon de réponse (mails, tickets).
+          {!aiAvailable() && " La clé ANTHROPIC_API_KEY n'est pas configurée : l'assistant est désactivé."}
+        </p>
+        <WritingStyleForm initial={style} />
+      </section>
 
       {/* ─── Sources ─── */}
       <section className="card divide-y divide-border">
