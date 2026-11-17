@@ -12,6 +12,7 @@ import Link from "next/link";
 import { countUnread } from "@/lib/notifications/service";
 import { Bell } from "@/components/pwa/bell";
 import { MobileTabBar } from "@/components/pwa/mobile-nav";
+import { CommandPalette, SearchButton } from "@/components/search/command-palette";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { db } = await requireOwner();
@@ -48,7 +49,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <LogoMark />
           <span className="font-display text-[17px] font-semibold tracking-[-0.01em] text-text">Cockpit</span>
         </Link>
-        <Bell unread={unread} />
+        <span className="flex items-center gap-1">
+          <SearchButton variant="icon" />
+          <Bell unread={unread} />
+        </span>
       </header>
       <div className="mx-auto flex min-h-dvh max-w-[1440px] flex-col md:flex-row">
         <aside className="hidden shrink-0 flex-col gap-6 border-border px-3 py-4 md:sticky md:top-0 md:flex md:h-dvh md:w-60 md:border-r md:py-5">
@@ -59,7 +63,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </span>
             <Bell unread={unread} />
           </div>
-          <nav aria-label="Navigation principale" className="flex flex-col gap-0.5">
+          <SearchButton />
+          <nav aria-label="Navigation principale" className="-mt-3 flex flex-col gap-0.5">
             <NavLink href="/" label="Aujourd'hui" count={counts.urgentTasks} alert />
             <NavLink href="/inbox" label="Mails" count={counts.inbox} />
             <NavLink href="/taches" label="Tâches" />
@@ -73,6 +78,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </aside>
         <main className="min-w-0 flex-1 px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-4 md:px-8 md:pb-12 md:pt-7">{children}</main>
       </div>
+      <CommandPalette />
       <MobileTabBar counts={{ inbox: counts.inbox, espaces: openTasks, urgent: counts.urgentTasks }} footer={syncAndLogout} />
     </div>
   );

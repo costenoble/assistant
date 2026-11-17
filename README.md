@@ -26,6 +26,7 @@ Il devient aussi l'outil de gestion client : **fiches clients, contacts, projets
 | **Mails** | Liste façon boîte de réception ; un clic ouvre le mail (contenu récupéré sur la boîte en lecture seule, affiché dans un cadre isolé, images distantes bloquées), pièces jointes téléchargeables, réponse envoyée depuis la bonne adresse et rangée dans « Envoyés » |
 | **Assistant IA** | Brouillon de réponse à un mail ou à un ticket (avec consigne facultative, dans ton ton défini dans Réglages), découpage d'une tâche en sous-tâches, idées pour un projet, point du matin sur Aujourd'hui. Rien n'est envoyé ni créé sans ton clic |
 | **App mobile** | Cockpit s'installe sur le téléphone (écran d'accueil, plein écran, icône) : barre d'onglets en bas, menu « Plus », page hors connexion. Cloche des notifications (tâches, commentaires et validations des clients, mails urgents), aussi envoyées sur les appareils où tu les actives (Réglages → Notifications ; sur iPhone, après installation) |
+| **Recherche et tableau** | Cmd + K (ou « / », ou la loupe) : mails, tâches, tickets (« #12 »), clients, contacts, projets, réunions. Tableau : glisser-déposer à la souris, appui long puis glisser au doigt, Alt + flèches au clavier |
 | **Portail client** | `/portail` : chaque contact avec accès voit **uniquement** les projets publiés de son entreprise. Connexion par lien magique, accès retirable en 1 clic |
 
 ---
