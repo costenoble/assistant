@@ -60,7 +60,8 @@ drizzle/                     Migrations SQL (générées depuis le schéma + tri
 | Clés SaaS | sha256 en base, affichées une fois, rotation en 1 clic | Standard type GitHub/Stripe |
 | Partageable vs interne | Rien d'interne dans une table lue par le portail (notes internes, mails, tâches → tables admin) | Une requête du portail ne peut pas ramener une colonne sensible par accident |
 | Rattachement client | `linkItemsToClients` après chaque synchro : contact exact, sinon domaine. Ne remplace jamais un rattachement existant | Automatique par défaut, mais ton choix manuel a toujours le dernier mot |
-| Tâches de projet | Un ticket de sorte `task` (colonne `kind`) rattaché à un projet : même fil, mêmes notes internes, mêmes emails que les demandes. Un commentaire de l'admin ne change pas le statut ; « Envoyer en validation » le passe à « À valider » ; le client valide (fait) ou commente (retour à faire) | Une seule mécanique à maintenir pour les échanges avec les clients |
+| Espaces de travail | Un espace = un client (`clients.kind` : `client` ou `internal`, plus une couleur). Ses membres sont les contacts avec accès au portail. Pas de table à part : invitations, accès et isolation du portail restent ceux des clients | Réutiliser la sécurité déjà testée du portail |
+| Tâches | Un ticket de sorte `task` (colonne `kind`), dans un projet ou directement dans l'espace, avec priorité, assigné (`assigned_to_owner` ou `assignee_contact_id`), échéance, étiquettes, description et `position` (ordre dans la colonne du tableau, décimal pour insérer entre deux cartes) : même fil, mêmes notes internes, mêmes emails que les demandes. Un commentaire de l'admin ne change pas le statut ; « Envoyer en validation » le passe à « À valider » ; le client valide (fait) ou commente (retour à faire) | Une seule mécanique à maintenir pour les échanges avec les clients |
 | Brouillons | Un ticket rattaché à un projet en brouillon n'est jamais lu par le portail (filtre dans `lib/auth/access.ts`) | Préparer un projet et ses tâches sans que le client les voie |
 | Tickets | Tables `tickets` + `ticket_messages`, plus un item miroir (kind `ticket`) tenu à jour par `lib/tickets/service.ts` | Le ticket garde sa conversation ; le flux, ses priorités et la fiche client le voient sans code en plus |
 | Statuts des tickets | Client écrit → « à traiter » ; tu réponds → « en attente du client » (ou « résolu ») ; note interne → rien ne change | Rien à trier à la main, et une réponse du client ne se perd jamais |
@@ -101,6 +102,9 @@ Vision : l'outil unique — assistant perso **et** gestion client (CRM, support,
 | 1. CRM | Rattachement auto des mails à un client (contact, puis domaine), fil « à traiter » et notes internes par client, `@client` en saisie rapide | ✅ |
 | 2. Tickets | Demandes depuis le portail, fil de messages, notes internes, statuts qui avancent seuls, notifications email, item miroir dans le flux | ✅ |
 | 2 bis. Projets partagés | Invitation des contacts, tâches de projet créées des deux côtés, commentaires, envoi en validation et validation par le client | ✅ |
+| 2 ter. Espaces de travail | Tableau Kanban et liste façon Linear, priorités, assignés, échéances, étiquettes, filtres, espaces internes | ✅ |
+| 2 quater. Réunions | Transcription au micro, résumé et tâches proposées par Claude, rattachées à l'espace | |
+| 2 quinquies. Assistant IA | Brouillons de réponse aux mails et tickets, idées sur un projet | |
 | 3. Livrables & previews | Maquettes versionnées (images, PDF, Figma), commentaires épinglés sur l'image, validation client ; sites testables en direct via les previews Vercel en iframe | |
 | 4. IA | Brief du matin, tri des tickets, brouillons de réponse, génération de maquettes / idées de site publiées en preview | |
 | Plus tard | Devis / factures (brancher Kompta.pro), temps passé | |

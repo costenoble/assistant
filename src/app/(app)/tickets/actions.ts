@@ -15,7 +15,7 @@ const id = z.uuid();
 function refreshTicket(ticketId: string) {
   revalidatePath(`/tickets/${ticketId}`);
   revalidatePath("/tickets");
-  revalidatePath("/projets", "layout");
+  revalidatePath("/espaces", "layout");
   revalidatePath("/");
 }
 

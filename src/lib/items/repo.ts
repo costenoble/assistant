@@ -165,6 +165,7 @@ const priorityColumns = {
   },
   ticket: {
     kind: tickets.kind,
+    priority: tickets.priority,
     contact_id: tickets.contact_id,
     urgent: tickets.urgent,
     last_client_message_at: tickets.last_client_message_at,
@@ -204,6 +205,7 @@ function scoreRow(row: PriorityRow, rules: (typeof mailRules.$inferSelect)[], no
       ticket: row.ticket
         ? {
             kind: row.ticket.kind,
+            priority: row.ticket.priority,
             fromClient: row.ticket.contact_id !== null,
             urgent: row.ticket.urgent,
             lastClientMessageAt: row.ticket.last_client_message_at,

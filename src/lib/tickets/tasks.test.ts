@@ -5,7 +5,7 @@ import { clientContacts, clients, items, projects } from "@/lib/db/schema";
 import { createTestDb } from "@/test/db";
 import { getPortalProject, getPortalTicket, getPortalTickets } from "@/lib/auth/access";
 import { getProjectDetail, listProjects } from "@/lib/projects/queries";
-import { addTicketMessage, clientValidateTask, createTicket } from "./service";
+import { addTicketMessage, clientValidateTask, createTicket, moveTask, updateTask } from "./service";
 
 let db: Db;
 let x: string, boss: string, app: string, draft: string;
@@ -31,13 +31,15 @@ const bossTask = (subject = "Ajouter un export CSV") =>
   createTicket(db, { kind: "task", clientId: x, projectId: app, contactId: boss, author: "client", subject, body: "Sur l'écran des plannings." });
 
 describe("tâches de projet", () => {
-  it("une tâche exige un projet", async () => {
-    await expect(createTicket(db, { kind: "task", clientId: x, author: "admin", subject: "s", body: "b" })).rejects.toThrow();
+  it("une tâche peut vivre dans l'espace sans projet", async () => {
+    const t = await createTicket(db, { kind: "task", clientId: x, author: "admin", subject: "Idée", body: "b" });
+    expect(t).toMatchObject({ kind: "task", project_id: null, assigned_to_owner: true });
   });
 
   it("tâche du patron → dans le flux, avec sa raison", async () => {
     const t = await bossTask();
-    expect(t).toMatchObject({ kind: "task", status: "open" });
+    expect(t).toMatchObject({ kind: "task", status: "open", description: "Sur l'écran des plannings." });
+    expect((await getPortalTicket(db, [x], t.id))?.messages).toEqual([]); // le texte de départ est la description
     const item = await itemOf(t.item_id);
     expect(item).toMatchObject({ kind: "ticket", status: "todo", project_id: app });
     expect(item.priority_reasons).toContain("Tâche confiée par le client");
@@ -87,7 +89,7 @@ describe("portail : projets", () => {
 
     const seen = await getPortalProject(db, [x], app);
     expect(seen?.tasks.map((k) => k.id)).toEqual([t.id]);
-    expect(seen?.tasks[0]).toMatchObject({ author_name: "Le Patron", replies: 1 });
+    expect(seen?.tasks[0]).toMatchObject({ author_name: "Le Patron", replies: 0 });
 
     expect(await getPortalProject(db, [x], draft)).toBeNull();
     expect(await getPortalTicket(db, [x], hidden.id)).toBeNull();
@@ -118,5 +120,77 @@ describe("admin : projets", () => {
     const detail = await getProjectDetail(db, app);
     expect(detail?.tasks).toHaveLength(2);
     expect(detail?.portalContacts.map((c) => c.name)).toEqual(["Le Patron"]);
+  });
+});
+
+describe("propriétés façon Linear", () => {
+  it("assignée au patron → sort de ton « À faire », revient quand elle t'est réassignée", async () => {
+    const t = await bossTask();
+    await updateTask(db, t.id, { assignee: boss });
+    expect((await itemOf(t.item_id)).status).toBe("waiting");
+    await updateTask(db, t.id, { assignee: "owner" });
+    expect((await itemOf(t.item_id)).status).toBe("todo");
+  });
+
+  it("backlog et annulé ne sont pas dans « À faire maintenant »", async () => {
+    const t = await bossTask();
+    await updateTask(db, t.id, { status: "backlog" });
+    expect((await itemOf(t.item_id)).status).toBe("waiting");
+    await updateTask(db, t.id, { status: "canceled" });
+    expect((await itemOf(t.item_id)).status).toBe("archived");
+  });
+
+  it("priorité, échéance et étiquettes", async () => {
+    const t = await bossTask();
+    const u = await updateTask(db, t.id, { priority: "high", dueOn: "2020-01-10", labels: [" Bug ", "bug", "UX", ""] });
+    expect(u).toMatchObject({ priority: "high", due_on: "2020-01-10", labels: ["bug", "ux"], urgent: false });
+    const item = await itemOf(t.item_id);
+    expect(item.priority_reasons).toEqual(expect.arrayContaining(["Priorité haute"]));
+    expect(item.priority_reasons.some((r) => r.startsWith("En retard"))).toBe(true);
+    expect(item.due_at?.toISOString()).toBe("2020-01-10T17:00:00.000Z"); // 18 h à Paris
+  });
+
+  it("« bloquant » coché par le client = priorité urgente", async () => {
+    const t = await createTicket(db, { kind: "task", clientId: x, projectId: app, contactId: boss, author: "client", subject: "Panne", body: "b", urgent: true });
+    expect(t.priority).toBe("urgent");
+    expect((await itemOf(t.item_id)).priority_reasons).toContain("Priorité urgente");
+  });
+
+  it("changer de colonne place la tâche en bas ; glisser-déposer garde la position donnée", async () => {
+    const a = await bossTask("A");
+    const b = await bossTask("B");
+    expect(b.position).toBeGreaterThan(a.position);
+    const moved = await updateTask(db, a.id, { status: "in_progress" });
+    expect(moved?.position).toBe(1);
+    const dropped = await moveTask(db, b.id, "in_progress", 0.5);
+    expect(dropped).toMatchObject({ status: "in_progress", position: 0.5 });
+    expect((await itemOf(b.item_id)).status).toBe("in_progress");
+  });
+});
+
+describe("espaces de travail", () => {
+  it("admin : compteurs et tâches avec projet, auteur et assigné", async () => {
+    const { getWorkspace, listWorkspaces } = await import("@/lib/workspaces/queries");
+    const t = await bossTask();
+    await updateTask(db, t.id, { assignee: boss, labels: ["ux"] });
+    await createTicket(db, { kind: "task", clientId: x, author: "admin", subject: "Sans projet", body: "-" });
+    const row = (await listWorkspaces(db)).find((w) => w.id === x)!;
+    expect(row).toMatchObject({ members: 1, projects: 2, todo: 2, kind: "client" });
+    const ws = await getWorkspace(db, x);
+    const card = ws!.tasks.find((k) => k.id === t.id)!;
+    expect(card).toMatchObject({ project_name: "App planning", author_name: "Le Patron", assignee_name: "Le Patron", labels: ["ux"], replies: 0 });
+  });
+
+  it("portail : son espace seulement, sans les tâches des brouillons", async () => {
+    const { getPortalWorkspace } = await import("@/lib/auth/access");
+    const visible = await bossTask();
+    const loose = await createTicket(db, { kind: "task", clientId: x, author: "admin", subject: "Sans projet", body: "-" });
+    await createTicket(db, { kind: "task", clientId: x, projectId: draft, author: "admin", subject: "Secret", body: "-" });
+    const ws = await getPortalWorkspace(db, [x], x);
+    expect(ws?.tasks.map((k) => k.id).sort()).toEqual([visible.id, loose.id].sort());
+    expect(ws?.projects.map((p) => p.name)).toEqual(["App planning"]);
+    expect(ws?.members.map((m) => m.name)).toEqual(["Le Patron"]);
+    const [other] = await db.insert(clients).values({ name: "Autre", slug: "autre" }).returning();
+    expect(await getPortalWorkspace(db, [other!.id], x)).toBeNull();
   });
 });

@@ -74,7 +74,8 @@ export async function createTask(_prev: PortalFormState, formData: FormData): Pr
   const { db, contact, clientIds } = await requireClient();
   const parsed = z
     .object({
-      project_id: z.uuid(),
+      workspace_id: z.uuid(),
+      project_id: optionalId,
       subject: z.string().trim().min(3, "Donnez un titre à la tâche (3 caractères minimum).").max(200),
       body: z.string().trim().max(20_000).optional(),
       urgent: z.literal("on").optional(),
@@ -82,14 +83,17 @@ export async function createTask(_prev: PortalFormState, formData: FormData): Pr
     .safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide." };
 
-  const visible = await getPortalProject(db, clientIds, parsed.data.project_id);
-  if (!visible) return { error: "Projet introuvable." };
+  // L'espace doit être l'un des siens ; le projet, s'il y en a un, visible (même espace, hors brouillon).
+  const workspaceId = parsed.data.workspace_id;
+  if (!clientIds.includes(workspaceId)) return { error: "Espace introuvable." };
+  const visible = parsed.data.project_id ? await getPortalProject(db, clientIds, parsed.data.project_id) : null;
+  if (parsed.data.project_id && (!visible || visible.project.client_id !== workspaceId)) return { error: "Projet introuvable." };
 
   const body = parsed.data.body || parsed.data.subject;
   const ticket = await createTicket(db, {
     kind: "task",
-    clientId: visible.project.client_id,
-    projectId: visible.project.id,
+    clientId: workspaceId,
+    projectId: visible?.project.id ?? null,
     contactId: contact.id,
     author: "client",
     subject: parsed.data.subject,
@@ -97,7 +101,8 @@ export async function createTask(_prev: PortalFormState, formData: FormData): Pr
     urgent: parsed.data.urgent === "on",
   });
   await notifyOwnerOfClientMessage(db, ticket, body, "new", contact.full_name);
-  revalidatePath(`/portail/projets/${visible.project.id}`);
+  revalidatePath(`/portail/espaces/${workspaceId}`);
+  if (visible) revalidatePath(`/portail/projets/${visible.project.id}`);
   return { sent: Date.now() };
 }
 
@@ -112,5 +117,6 @@ export async function validateTask(_prev: PortalFormState, formData: FormData): 
   await notifyOwnerOfClientMessage(db, ticket, "", "validated", contact.full_name);
   revalidatePath(`/portail/demandes/${visible.id}`);
   if (visible.project_id) revalidatePath(`/portail/projets/${visible.project_id}`);
+  revalidatePath(`/portail/espaces/${visible.client_id}`);
   return { sent: Date.now() };
 }

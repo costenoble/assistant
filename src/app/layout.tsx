@@ -1,10 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Space_Grotesk } from "next/font/google";
+import { Bricolage_Grotesque, Inter } from "next/font/google";
 import "./globals.css";
 
-// Inter pour le texte, Space Grotesk pour les titres : chargées et servies par Next (pas d'appel à Google côté visiteur).
+// Inter pour le texte, Bricolage Grotesque pour les titres : chargées et servies par Next (pas d'appel à Google côté visiteur).
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
-const display = Space_Grotesk({ subsets: ["latin"], variable: "--font-display-face", display: "swap" });
+const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display-face", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Cockpit",

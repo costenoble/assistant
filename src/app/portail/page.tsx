@@ -1,6 +1,9 @@
 import { requireClient } from "@/lib/auth/require-client";
 import Link from "next/link";
+import { inArray } from "drizzle-orm";
 import { getPortalProjects, getPortalTickets } from "@/lib/auth/access";
+import { clients } from "@/lib/db/schema";
+import { WorkspaceDot } from "@/components/workspace/bits";
 import { PROJECT_STATUS_LABELS, TICKET_STATUS_LABELS_CLIENT } from "@/lib/db/types";
 import { EmptyState } from "@/components/item-row";
 import { formatDay, relative } from "@/lib/time/paris";
@@ -10,7 +13,13 @@ export const dynamic = "force-dynamic";
 export default async function PortalHome() {
   // Lecture bornée aux clients du contact connecté, hors brouillons.
   const { db, contact, clientIds } = await requireClient();
-  const [projects, all] = await Promise.all([getPortalProjects(db, clientIds), getPortalTickets(db, clientIds)]);
+  const [projects, all, workspaces] = await Promise.all([
+    getPortalProjects(db, clientIds),
+    getPortalTickets(db, clientIds),
+    clientIds.length
+      ? db.select({ id: clients.id, name: clients.name, color: clients.color }).from(clients).where(inArray(clients.id, clientIds))
+      : Promise.resolve([]),
+  ]);
   const now = new Date();
   const requests = all.filter((t) => t.kind === "request");
   const tasks = all.filter((t) => t.kind === "task");
@@ -32,6 +41,31 @@ export default async function PortalHome() {
         </div>
         <Link href="/portail/demandes/nouvelle" className="btn-primary h-10 px-5">Nouvelle demande</Link>
       </div>
+
+      <section aria-labelledby="espaces-h" className="space-y-3">
+        <h2 id="espaces-h" className="section-title">Vos espaces de travail</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {workspaces.map((w) => {
+            const wsTasks = tasks.filter((t) => t.client_id === w.id);
+            const toValidate = wsTasks.filter((t) => t.status === "waiting_client").length;
+            const mine = wsTasks.filter((t) => t.assignee_contact_id === contact.id && !["resolved", "canceled"].includes(t.status)).length;
+            return (
+              <Link key={w.id} href={`/portail/espaces/${w.id}`} className="card flex flex-col gap-3 p-5 transition hover:border-border-strong hover:shadow-[0_8px_24px_-16px_rgba(0,0,0,0.25)]">
+                <h3 className="flex items-center gap-2.5 font-display text-[19px] font-semibold leading-6">
+                  <WorkspaceDot color={w.color} className="size-3.5" />
+                  {w.name}
+                </h3>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
+                  {toValidate > 0 && <span className="font-semibold text-accent">{toValidate} à valider</span>}
+                  {mine > 0 && <span className="font-semibold text-text">{mine} assignée{mine > 1 ? "s" : ""} à vous</span>}
+                  <span>{wsTasks.filter((t) => ["open", "in_progress"].includes(t.status)).length} en cours</span>
+                  <span>Ouvrir le tableau →</span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
 
       <section aria-labelledby="projets-h" className="space-y-3">
         <h2 id="projets-h" className="section-title">Vos projets</h2>

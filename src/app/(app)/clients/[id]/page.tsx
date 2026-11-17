@@ -143,7 +143,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
           projects.map((p) => (
             <div key={p.id} className="flex flex-wrap items-start justify-between gap-3 px-5 py-3">
               <div className="min-w-0 space-y-0.5">
-                <Link href={`/projets/${p.id}`} className="font-medium hover:underline">{p.name}</Link>
+                <Link href={`/espaces/${client.id}?projet=${p.id}`} className="font-medium hover:underline">{p.name}</Link>
                 {p.description && <p className="text-sm text-muted">{p.description}</p>}
                 {p.due_on && <p className="text-xs text-muted">Échéance {formatDay(p.due_on)}</p>}
               </div>

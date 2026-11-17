@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { getPortalTicket } from "@/lib/auth/access";
 import { requireClient } from "@/lib/auth/require-client";
-import { statusLabel } from "@/lib/db/types";
+import { TASK_PRIORITY_LABELS, statusLabel } from "@/lib/db/types";
+import { DueDate, LabelChip, PriorityIcon } from "@/components/workspace/bits";
+import { assigneeName } from "@/components/workspace/task-card";
 import { TicketThread } from "@/components/ticket-thread";
 import { formatDay } from "@/lib/time/paris";
 import { RequestReplyForm, ValidateTaskForm } from "../../forms";
@@ -28,8 +30,10 @@ export default async function RequestPage({
 
   return (
     <div className="space-y-6">
-      {task && ticket.project_id ? (
-        <Link href={`/portail/projets/${ticket.project_id}`} className="text-sm text-muted hover:text-text">← {ticket.project_name}</Link>
+      {task ? (
+        <Link href={`/portail/espaces/${ticket.client_id}${ticket.project_id ? `?projet=${ticket.project_id}` : ""}`} className="text-sm text-muted hover:text-text">
+          ← {ticket.project_name ?? "Tableau de l'espace"}
+        </Link>
       ) : (
         <Link href="/portail" className="text-sm text-muted hover:text-text">← Retour à votre espace</Link>
       )}
@@ -44,6 +48,21 @@ export default async function RequestPage({
           {statusLabel(ticket.kind, ticket.status, "client")} · {task ? "créée" : "envoyée"} le {formatDay(ticket.created_at)}
         </p>
       </div>
+      {task && (
+        <section className="card space-y-4 p-5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted">
+            <span className="flex items-center gap-1.5"><PriorityIcon priority={ticket.priority} />{TASK_PRIORITY_LABELS[ticket.priority]}</span>
+            {assigneeName(ticket, "client") && <span>Assignée à <strong className="font-medium text-text">{assigneeName(ticket, "client")}</strong></span>}
+            {ticket.due_on && <span className="flex items-center gap-1.5">Échéance <DueDate dueOn={ticket.due_on} done={ticket.status === "resolved"} /></span>}
+            {ticket.labels.map((l) => <LabelChip key={l} label={l} />)}
+          </div>
+          {ticket.description ? (
+            <p className="whitespace-pre-line text-[15px] leading-7">{ticket.description}</p>
+          ) : (
+            <p className="text-sm text-muted">Pas de description.</p>
+          )}
+        </section>
+      )}
       <TicketThread messages={ticket.messages} viewer="client" />
       {task && ticket.status === "waiting_client" && (
         <section className="card flex flex-wrap items-center justify-between gap-4 border-accent/40 p-5">
