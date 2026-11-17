@@ -29,6 +29,9 @@ export interface PriorityInput {
     receivedAt?: string | Date | null;
   } | null;
   ticket?: {
+    kind?: "request" | "task";
+    /** Créé par un contact du client (et non par l'admin). */
+    fromClient?: boolean;
     urgent?: boolean;
     /** Dernier message du client : l'attente court depuis ce moment. */
     lastClientMessageAt?: string | Date | null;
@@ -188,7 +191,8 @@ export function computePriority(
 
   // 5 bis. Demande d'un client (ticket) : avant les mots-clés, pour que ses raisons s'affichent en premier.
   if (input.kind === "ticket") {
-    add(25, "Demande client");
+    if (input.ticket?.kind === "task") add(input.ticket.fromClient ? 25 : 10, input.ticket.fromClient ? "Tâche confiée par le client" : "Tâche du projet");
+    else add(25, "Demande client");
     if (input.ticket?.urgent) add(25, "Signalée bloquante par le client");
     const asked = toTime(input.ticket?.lastClientMessageAt);
     if (input.status !== "waiting" && asked != null) {

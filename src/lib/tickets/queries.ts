@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, desc, eq, inArray, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, type SQL } from "drizzle-orm";
 import type { Db } from "@/lib/db";
 import { clientContacts, clients, projects, ticketMessages, tickets } from "@/lib/db/schema";
 import type { TicketStatus } from "@/lib/db/types";
@@ -36,7 +36,7 @@ function list(db: Db, where: SQL) {
 
 /** Liste admin. « À traiter » : les bloquants d'abord, puis la plus ancienne attente. */
 export async function listTickets(db: Db, filter: TicketFilter) {
-  const where = inArray(tickets.status, [...TICKET_FILTERS[filter].statuses]);
+  const where = and(eq(tickets.kind, "request"), inArray(tickets.status, [...TICKET_FILTERS[filter].statuses]))!;
   return filter === "todo"
     ? list(db, where).orderBy(desc(tickets.urgent), asc(tickets.last_client_message_at)).limit(200)
     : list(db, where).orderBy(desc(tickets.last_message_at)).limit(200);
@@ -46,8 +46,14 @@ export async function getClientTickets(db: Db, clientId: string) {
   return list(db, eq(tickets.client_id, clientId)).orderBy(desc(tickets.last_message_at)).limit(50);
 }
 
+/** Demandes à traiter (page Tickets). */
 export async function countOpenTickets(db: Db) {
-  return db.$count(tickets, eq(tickets.status, "open"));
+  return db.$count(tickets, and(eq(tickets.kind, "request"), eq(tickets.status, "open")));
+}
+
+/** Tâches de projet à faire (page Projets). */
+export async function countOpenTasks(db: Db) {
+  return db.$count(tickets, and(eq(tickets.kind, "task"), eq(tickets.status, "open")));
 }
 
 /** Un ticket complet pour l'admin, notes internes comprises. */
@@ -78,5 +84,10 @@ export async function getTicketDetail(db: Db, ticketId: string) {
     .leftJoin(clientContacts, eq(clientContacts.id, ticketMessages.contact_id))
     .where(eq(ticketMessages.ticket_id, ticketId))
     .orderBy(asc(ticketMessages.created_at));
-  return { ...row, messages };
+  // Quelqu'un sera-t-il prévenu d'une réponse ? (mêmes règles que lib/tickets/notify)
+  const notifiable = row.contact
+    ? !!row.contact.email && row.contact.portal
+    : row.ticket.kind === "task" &&
+      (await db.$count(clientContacts, and(eq(clientContacts.client_id, row.client.id), eq(clientContacts.portal_access, true)))) > 0;
+  return { ...row, messages, notifiable };
 }

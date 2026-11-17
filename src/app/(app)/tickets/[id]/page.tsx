@@ -16,34 +16,40 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
   const { db } = await requireOwner();
   const detail = await getTicketDetail(db, parsed.data);
   if (!detail) notFound();
-  const { ticket, client, contact, project, messages } = detail;
+  const { ticket, client, contact, project, messages, notifiable } = detail;
+  const task = ticket.kind === "task";
 
   return (
     <div className="max-w-4xl space-y-6">
       <div className="space-y-3">
-        <Link href="/tickets" className="text-sm text-muted hover:text-text">← Tickets</Link>
+        {task && project ? (
+          <Link href={`/projets/${project.id}`} className="text-sm text-muted hover:text-text">← {project.name}</Link>
+        ) : (
+          <Link href="/tickets" className="text-sm text-muted hover:text-text">← Tickets</Link>
+        )}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
             <h1 className="page-title">
               <span className="text-muted">#{ticket.number}</span> {ticket.subject}
             </h1>
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
-              <TicketStatusBadge status={ticket.status} />
+              <TicketStatusBadge status={ticket.status} kind={ticket.kind} />
+              {task && <span className="chip">Tâche du projet</span>}
               {ticket.urgent && <span className="rounded bg-critical/15 px-1.5 py-0.5 text-xs font-semibold text-critical">Bloquant</span>}
               <Link href={`/clients/${client.id}`} className="font-medium text-text hover:underline">{client.name}</Link>
-              {contact && <span>· {contact.name}{contact.email ? ` (${contact.email})` : ""}</span>}
-              {project && <span>· projet « {project.name} »</span>}
+              {contact ? <span>· {task ? "confiée par" : ""} {contact.name}{contact.email ? ` (${contact.email})` : ""}</span> : task && <span>· créée par toi</span>}
+              {project && !task && <span>· projet « {project.name} »</span>}
               <span>· ouvert le {formatDay(ticket.created_at)}</span>
             </p>
           </div>
-          <TicketStatusSelect ticketId={ticket.id} status={ticket.status} />
+          <TicketStatusSelect ticketId={ticket.id} kind={ticket.kind} status={ticket.status} />
         </div>
       </div>
 
       <TicketThread messages={messages} viewer="admin" />
 
       <section className="card p-5">
-        <ReplyForm ticketId={ticket.id} canNotify={!!contact?.email && !!contact.portal} />
+        <ReplyForm ticketId={ticket.id} kind={ticket.kind} canNotify={notifiable} />
       </section>
     </div>
   );

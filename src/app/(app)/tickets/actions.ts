@@ -15,6 +15,7 @@ const id = z.uuid();
 function refreshTicket(ticketId: string) {
   revalidatePath(`/tickets/${ticketId}`);
   revalidatePath("/tickets");
+  revalidatePath("/projets", "layout");
   revalidatePath("/");
 }
 
@@ -26,19 +27,25 @@ export async function replyToTicket(_prev: ReplyState, formData: FormData): Prom
   const body = z.string().trim().min(1, "Message vide").max(20_000).safeParse(formData.get("body"));
   if (!body.success) return { error: body.error.issues[0]?.message };
   const internal = formData.get("internal") === "on";
-  const resolve = !internal && formData.get("intent") === "resolve";
+  const intent = internal ? null : formData.get("intent");
+  // Demande : « reply » (en attente du client) ou « resolve ». Tâche : « comment », « submit » (à valider) ou « resolve ».
+  const resolve = intent === "resolve";
+  const status = intent === "submit" ? ("waiting_client" as const) : undefined;
 
   if (!(await getTicketRow(db, ticketId))) return { error: "Ticket introuvable" };
-  const { ticket } = await addTicketMessage(db, ticketId, { author: "admin", body: body.data, internal, resolve });
+  const { ticket } = await addTicketMessage(db, ticketId, { author: "admin", body: body.data, internal, resolve, status });
   if (!internal) await notifyClientOfReply(db, ticket, body.data);
 
   refreshTicket(ticketId);
+  const task = ticket.kind === "task";
   return {
     message: internal
       ? "Note interne ajoutée (invisible du client)."
-      : resolve
-        ? "Réponse envoyée, ticket résolu."
-        : "Réponse envoyée. Le client est prévenu par email.",
+      : status
+        ? "Envoyée en validation. Le client est prévenu par email."
+        : resolve
+          ? task ? "Tâche marquée faite. Le client est prévenu." : "Réponse envoyée, ticket résolu."
+          : task ? "Commentaire envoyé. Le client est prévenu par email." : "Réponse envoyée. Le client est prévenu par email.",
   };
 }
 

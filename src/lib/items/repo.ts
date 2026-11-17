@@ -164,6 +164,8 @@ const priorityColumns = {
     received_at: emailMessages.received_at,
   },
   ticket: {
+    kind: tickets.kind,
+    contact_id: tickets.contact_id,
     urgent: tickets.urgent,
     last_client_message_at: tickets.last_client_message_at,
   },
@@ -200,7 +202,12 @@ function scoreRow(row: PriorityRow, rules: (typeof mailRules.$inferSelect)[], no
           }
         : null,
       ticket: row.ticket
-        ? { urgent: row.ticket.urgent, lastClientMessageAt: row.ticket.last_client_message_at }
+        ? {
+            kind: row.ticket.kind,
+            fromClient: row.ticket.contact_id !== null,
+            urgent: row.ticket.urgent,
+            lastClientMessageAt: row.ticket.last_client_message_at,
+          }
         : null,
     },
     { now, rules },

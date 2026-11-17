@@ -2,7 +2,7 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/lib/db";
 import { items, ticketMessages, tickets } from "@/lib/db/schema";
-import type { ItemStatus, Ticket, TicketMessage, TicketStatus } from "@/lib/db/types";
+import type { ItemStatus, Ticket, TicketKind, TicketMessage, TicketStatus } from "@/lib/db/types";
 import { recomputeOne } from "@/lib/items/repo";
 
 /**
@@ -46,6 +46,8 @@ async function syncItem(db: Db, ticket: Ticket, excerpt?: string) {
 }
 
 export interface NewTicket {
+  /** request (défaut) = demande au support ; task = tâche partagée d'un projet (projectId requis). */
+  kind?: TicketKind;
   clientId: string;
   projectId?: string | null;
   /** Contact auteur (portail). Absent quand l'admin ouvre le ticket. */
@@ -57,17 +59,21 @@ export interface NewTicket {
 }
 
 export async function createTicket(db: Db, input: NewTicket): Promise<Ticket> {
+  const kind = input.kind ?? "request";
+  if (kind === "task" && !input.projectId) throw new Error("Une tâche appartient à un projet");
   const now = new Date();
   const [ticket] = await db
     .insert(tickets)
     .values({
+      kind,
       client_id: input.clientId,
       project_id: input.projectId ?? null,
       contact_id: input.contactId ?? null,
       subject: input.subject.slice(0, 200),
       urgent: input.urgent ?? false,
-      // Ouvert par l'admin pour le compte du client : la balle est dans le camp du client.
-      status: input.author === "client" ? "open" : "waiting_client",
+      // Demande ouverte par l'admin pour le client : la balle est dans le camp du client.
+      // Tâche créée par l'admin : c'est lui qui la fait.
+      status: input.author === "client" || kind === "task" ? "open" : "waiting_client",
       last_client_message_at: input.author === "client" ? now : null,
       last_message_at: now,
     })
@@ -90,12 +96,15 @@ export interface NewMessage {
   internal?: boolean;
   /** Réponse de l'admin qui clôt la demande. */
   resolve?: boolean;
+  /** Statut voulu par l'admin avec son message (ex. « envoyer en validation »). Prime sur la règle par défaut. */
+  status?: TicketStatus;
 }
 
 /**
  * Ajoute un message et fait avancer le statut :
- * - le client écrit → la demande repasse « à traiter » si elle attendait sa réponse ou était résolue ;
- * - l'admin répond → « en attente du client », ou « résolu » s'il le demande ;
+ * - le client écrit → « à traiter » si elle attendait sa réponse ou était résolue (correction demandée) ;
+ * - l'admin répond à une demande → « en attente du client », ou « résolu » s'il le demande ;
+ * - l'admin commente une tâche → rien ne change, sauf statut explicite (envoyer en validation, fait) ;
  * - une note interne ne change rien pour le client.
  */
 export async function addTicketMessage(db: Db, ticketId: string, msg: NewMessage) {
@@ -108,7 +117,9 @@ export async function addTicketMessage(db: Db, ticketId: string, msg: NewMessage
   if (msg.author === "client") {
     if (status === "waiting_client" || status === "resolved") status = "open";
   } else if (!internal) {
-    status = msg.resolve ? "resolved" : "waiting_client";
+    if (msg.status) status = msg.status;
+    else if (msg.resolve) status = "resolved";
+    else if (ticket.kind === "request") status = "waiting_client";
   }
 
   const [message] = await db
@@ -126,6 +137,20 @@ export async function addTicketMessage(db: Db, ticketId: string, msg: NewMessage
     .returning();
   await syncItem(db, updated!, msg.author === "client" ? msg.body : undefined);
   return { ticket: updated!, message: message!, reopened: ticket.status !== "open" && status === "open" };
+}
+
+/** Le client valide une tâche qu'on lui a soumise : une trace dans le fil, puis « fait ». */
+export async function clientValidateTask(db: Db, ticketId: string, contactId: string) {
+  const ticket = await getTicketRow(db, ticketId);
+  if (!ticket || ticket.kind !== "task" || ticket.status !== "waiting_client") return null;
+  await db.insert(ticketMessages).values({ ticket_id: ticketId, author: "client", contact_id: contactId, body: "A validé la tâche." });
+  const [updated] = await db
+    .update(tickets)
+    .set({ status: "resolved", last_message_at: new Date() })
+    .where(eq(tickets.id, ticketId))
+    .returning();
+  await syncItem(db, updated!);
+  return updated!;
 }
 
 export async function setTicketStatus(db: Db, ticketId: string, status: TicketStatus): Promise<Ticket | null> {

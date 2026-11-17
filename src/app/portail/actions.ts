@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { getPortalTicket, resolvePortalTicketTarget } from "@/lib/auth/access";
+import { getPortalProject, getPortalTicket, resolvePortalTicketTarget } from "@/lib/auth/access";
 import { requireClient } from "@/lib/auth/require-client";
 import { notifyOwnerOfClientMessage } from "@/lib/tickets/notify";
-import { addTicketMessage, createTicket } from "@/lib/tickets/service";
+import { addTicketMessage, clientValidateTask, createTicket } from "@/lib/tickets/service";
 
 /**
  * Actions du portail. Chacune repart de requireClient() et vérifie, via
@@ -49,7 +49,7 @@ export async function createRequest(_prev: PortalFormState, formData: FormData):
     body: parsed.data.body,
     urgent: parsed.data.urgent === "on",
   });
-  await notifyOwnerOfClientMessage(db, ticket, parsed.data.body, "new");
+  await notifyOwnerOfClientMessage(db, ticket, parsed.data.body, "new", contact.full_name);
   revalidatePath("/portail");
   redirect(`/portail/demandes/${ticket.id}?envoye=1`);
 }
@@ -63,8 +63,54 @@ export async function replyToRequest(_prev: PortalFormState, formData: FormData)
   if (!tid.success || !(await getPortalTicket(db, clientIds, tid.data))) return { error: "Demande introuvable." };
 
   const { ticket } = await addTicketMessage(db, tid.data, { author: "client", contactId: contact.id, body: body.data });
-  await notifyOwnerOfClientMessage(db, ticket, body.data, "reply");
+  await notifyOwnerOfClientMessage(db, ticket, body.data, "reply", contact.full_name);
   revalidatePath(`/portail/demandes/${tid.data}`);
-  revalidatePath("/portail");
+  revalidatePath("/portail", "layout");
+  return { sent: Date.now() };
+}
+
+/** Le contact confie une tâche sur un projet qu'il voit. */
+export async function createTask(_prev: PortalFormState, formData: FormData): Promise<PortalFormState> {
+  const { db, contact, clientIds } = await requireClient();
+  const parsed = z
+    .object({
+      project_id: z.uuid(),
+      subject: z.string().trim().min(3, "Donnez un titre à la tâche (3 caractères minimum).").max(200),
+      body: z.string().trim().max(20_000).optional(),
+      urgent: z.literal("on").optional(),
+    })
+    .safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide." };
+
+  const visible = await getPortalProject(db, clientIds, parsed.data.project_id);
+  if (!visible) return { error: "Projet introuvable." };
+
+  const body = parsed.data.body || parsed.data.subject;
+  const ticket = await createTicket(db, {
+    kind: "task",
+    clientId: visible.project.client_id,
+    projectId: visible.project.id,
+    contactId: contact.id,
+    author: "client",
+    subject: parsed.data.subject,
+    body,
+    urgent: parsed.data.urgent === "on",
+  });
+  await notifyOwnerOfClientMessage(db, ticket, body, "new", contact.full_name);
+  revalidatePath(`/portail/projets/${visible.project.id}`);
+  return { sent: Date.now() };
+}
+
+/** Le contact valide une tâche qu'on lui a soumise. */
+export async function validateTask(_prev: PortalFormState, formData: FormData): Promise<PortalFormState> {
+  const { db, contact, clientIds } = await requireClient();
+  const tid = z.uuid().safeParse(formData.get("ticket_id"));
+  const visible = tid.success ? await getPortalTicket(db, clientIds, tid.data) : null;
+  if (!visible || visible.kind !== "task") return { error: "Tâche introuvable." };
+  const ticket = await clientValidateTask(db, visible.id, contact.id);
+  if (!ticket) return { error: "Cette tâche n'attend plus de validation." };
+  await notifyOwnerOfClientMessage(db, ticket, "", "validated", contact.full_name);
+  revalidatePath(`/portail/demandes/${visible.id}`);
+  if (visible.project_id) revalidatePath(`/portail/projets/${visible.project_id}`);
   return { sent: Date.now() };
 }

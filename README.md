@@ -21,6 +21,7 @@ Il devient aussi l'outil de gestion client : **fiches clients, contacts, projets
 | **Clients** | Fiches clients (statut, site, domaines mail), contacts, projets. Un projet est en *brouillon* (privé) tant que tu ne le publies pas |
 | **CRM** | Les mails sont rattachés tout seuls à leur client (adresse d'un contact, sinon domaine mail). Chaque fiche montre ce qui est à traiter pour ce client, ce qui a été clos, et des notes internes. Rattachement manuel sur chaque ligne, ou `@client` dans la saisie rapide |
 | **Tickets** | Tes clients ouvrent une demande depuis leur espace (projet, case « bloquant »). Elle arrive dans « Aujourd'hui » et dans Tickets, triée par priorité. Tu réponds ou tu ajoutes une note interne, invisible du client. Chacun est prévenu par email avec un lien. Une réponse du client rouvre la demande |
+| **Projets partagés** | Invite un contact depuis sa fiche : il reçoit un email et accède à son espace. Sur chaque projet, vous créez des tâches, vous les commentez, et le cycle suit À faire → En cours → À valider → Fait. Le client valide ton travail ou demande une correction. Ses tâches arrivent dans « Aujourd'hui » et sur la page Projets. Un projet en brouillon et ses tâches restent invisibles du client |
 | **Portail client** | `/portail` : chaque contact avec accès voit **uniquement** les projets publiés de son entreprise. Connexion par lien magique, accès retirable en 1 clic |
 
 ---

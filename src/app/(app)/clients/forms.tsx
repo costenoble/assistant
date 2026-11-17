@@ -7,6 +7,7 @@ import {
   createClientRecord,
   deleteContact,
   deleteNote,
+  resendInvitation,
   setPortalAccess,
   setProjectStatus,
   type FormState,
@@ -60,14 +61,25 @@ export function PortalAccessToggle({ contactId, enabled, hasEmail }: { contactId
   const [state, setState] = useState<FormState>(null);
   return (
     <div className="space-y-1 text-right">
-      <button
-        className={enabled ? "btn" : "btn-primary"}
-        disabled={pending || (!enabled && !hasEmail)}
-        title={!hasEmail ? "Ajoute un email pour ouvrir l'accès" : undefined}
-        onClick={() => start(async () => setState(await setPortalAccess(contactId, !enabled)))}
-      >
-        {pending ? "…" : enabled ? "Retirer l'accès portail" : "Ouvrir l'accès portail"}
-      </button>
+      <div className="flex flex-wrap justify-end gap-2">
+        {enabled && (
+          <button className="btn-ghost" disabled={pending} onClick={() => start(async () => setState(await resendInvitation(contactId)))}>
+            Renvoyer l&apos;invitation
+          </button>
+        )}
+        <button
+          className={enabled ? "btn" : "btn-primary"}
+          disabled={pending || (!enabled && !hasEmail)}
+          title={!hasEmail ? "Ajoute un email pour inviter ce contact" : undefined}
+          onClick={() => {
+            if (enabled && !window.confirm("Retirer l'accès ? Le contact ne verra plus rien dès maintenant.")) return;
+            start(async () => setState(await setPortalAccess(contactId, !enabled)));
+          }}
+        >
+          {pending ? "…" : enabled ? "Retirer l'accès" : "Inviter"}
+        </button>
+      </div>
+      {enabled && <p className="text-xs text-ok">A accès à l&apos;espace client</p>}
       <Feedback state={state} />
     </div>
   );

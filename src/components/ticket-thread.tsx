@@ -20,7 +20,7 @@ export function TicketThread({ messages, viewer }: { messages: ThreadMessage[]; 
         const mine = m.author === viewer;
         const who =
           m.author === "admin"
-            ? viewer === "admin" ? "Toi" : "Notre réponse"
+            ? viewer === "admin" ? "Toi" : "Notre équipe"
             : viewer === "client" ? "Vous" : (m.contact_name ?? "Client");
         return (
           <li key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>

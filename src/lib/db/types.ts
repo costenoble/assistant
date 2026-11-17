@@ -49,6 +49,30 @@ export type TicketMessage = typeof ticketMessages.$inferSelect;
 export const TICKET_STATUSES = ["open", "in_progress", "waiting_client", "resolved"] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 export const TICKET_AUTHORS = ["client", "admin"] as const;
+/** request = demande au support ; task = tâche partagée d'un projet. */
+export const TICKET_KINDS = ["request", "task"] as const;
+export type TicketKind = (typeof TICKET_KINDS)[number];
+
+/** Tâches de projet, vues par l'admin. */
+export const TASK_STATUS_LABELS: Record<TicketStatus, string> = {
+  open: "À faire",
+  in_progress: "En cours",
+  waiting_client: "À valider (client)",
+  resolved: "Fait",
+};
+
+/** Tâches de projet, vues par le client. */
+export const TASK_STATUS_LABELS_CLIENT: Record<TicketStatus, string> = {
+  open: "À faire",
+  in_progress: "En cours",
+  waiting_client: "À valider",
+  resolved: "Fait",
+};
+
+export const statusLabel = (kind: TicketKind, status: TicketStatus, viewer: "admin" | "client") =>
+  (kind === "task"
+    ? viewer === "admin" ? TASK_STATUS_LABELS : TASK_STATUS_LABELS_CLIENT
+    : viewer === "admin" ? TICKET_STATUS_LABELS : TICKET_STATUS_LABELS_CLIENT)[status];
 
 /** Vu par l'admin. */
 export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
