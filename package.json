@@ -18,6 +18,7 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.10.0",
     "better-auth": "^1.7.20",
     "drizzle-orm": "^0.45.4",
     "imapflow": "^2.11.0",

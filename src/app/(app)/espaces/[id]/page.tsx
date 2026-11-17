@@ -72,9 +72,12 @@ export default async function WorkspacePage({
             {workspace.kind === "client" && <Link href={`/clients/${workspace.id}`} className="hover:text-text">Fiche client →</Link>}
           </div>
         </div>
-        {(view === "tableau" || view === "liste") && (
-          <NewTaskPanel workspaceId={workspace.id} {...options} defaultProject={sp.projet} />
-        )}
+        <div className="flex flex-wrap items-start gap-2">
+          <Link href={`/reunions?espace=${workspace.id}`} className="btn">Lancer une réunion</Link>
+          {(view === "tableau" || view === "liste") && (
+            <NewTaskPanel workspaceId={workspace.id} {...options} defaultProject={sp.projet} />
+          )}
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
