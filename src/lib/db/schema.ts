@@ -33,7 +33,7 @@ import {
   WORKSPACE_COLORS,
   WORKSPACE_KINDS,
 } from "./types";
-import type { MeetingProposal } from "./types";
+import type { MailAttachment, MeetingProposal } from "./types";
 
 /**
  * Schéma Postgres (Neon). Les clés sont en snake_case, comme les colonnes :
@@ -251,6 +251,12 @@ export const emailMessages = pgTable(
     is_seen: boolean("is_seen").notNull().default(false),
     is_answered: boolean("is_answered").notNull().default(false),
     is_bulk: boolean("is_bulk").notNull().default(false), // newsletter / notification automatique
+    // Contenu complet, récupéré à la première ouverture du mail dans Cockpit (pas à la synchro).
+    cc_addresses: text("cc_addresses").array().notNull().default(sql`'{}'::text[]`),
+    body_text: text("body_text"),
+    body_html: text("body_html"),
+    attachments: jsonb("attachments").$type<MailAttachment[]>().notNull().default([]),
+    body_fetched_at: ts("body_fetched_at"),
   },
   (t) => [
     unique().on(t.account_id, t.mailbox, t.uid_validity, t.uid),

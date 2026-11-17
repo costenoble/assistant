@@ -42,7 +42,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
 
       <section className="card space-y-3 p-5">
         <h2 className="section-title">Fiche</h2>
-        <form action={updateClient.bind(null, client.id)} className="grid gap-2 sm:grid-cols-[auto_2fr_2fr_auto]">
+        <form action={updateClient.bind(null, client.id)} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[auto_minmax(0,2fr)_minmax(0,2fr)_auto]">
           <select name="status" defaultValue={client.status} className="input" aria-label="Statut">
             {CLIENT_STATUSES.map((s) => <option key={s} value={s}>{CLIENT_STATUS_LABELS[s]}</option>)}
           </select>

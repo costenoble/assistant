@@ -44,7 +44,7 @@ export function NewWorkspaceForm() {
   const [state, action, pending] = useActionState<FormState, FormData>(createWorkspace, null);
   return (
     <form action={action} className="space-y-3">
-      <div className="grid gap-2 sm:grid-cols-[2fr_1fr_auto]">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
         <label className="sr-only" htmlFor="ws-name">Nom de l&apos;espace</label>
         <input id="ws-name" name="name" required placeholder="Nom de l'espace… ex. Semaphors" className="input" />
         <label className="sr-only" htmlFor="ws-kind">Type</label>

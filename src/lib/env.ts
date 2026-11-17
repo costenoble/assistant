@@ -22,6 +22,8 @@ const smtpSchema = z.object({
   SMTP_USER: z.string().min(3),
   SMTP_PASS: z.string().min(1),
   MAIL_FROM: z.string().optional(),
+  /** Nom affiché comme expéditeur (« Cockpit » par défaut) quand MAIL_FROM n'en donne pas. */
+  MAIL_FROM_NAME: z.string().optional(),
 });
 
 export const mailAccountSchema = z.object({

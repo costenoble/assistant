@@ -25,7 +25,7 @@ export function CreateClientForm() {
   const [state, action, pending] = useActionState<FormState, FormData>(createClientRecord, null);
   return (
     <form action={action} className="space-y-2">
-      <div className="grid gap-2 sm:grid-cols-[2fr_2fr_2fr_auto_auto]">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,2fr)_auto_auto]">
         <input name="name" required placeholder="Nom du client" className="input" />
         <input name="website" placeholder="Site (optionnel)" className="input" />
         <input name="email_domains" placeholder="Domaines mail : client.fr" className="input" />
@@ -44,7 +44,7 @@ export function AddContactForm({ clientId }: { clientId: string }) {
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="client_id" value={clientId} />
-      <div className="grid gap-2 sm:grid-cols-[2fr_2fr_1fr_1fr_auto]">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
         <input name="full_name" required placeholder="Nom" className="input" />
         <input name="email" type="email" placeholder="Email" className="input" />
         <input name="phone" placeholder="Téléphone" className="input" />
@@ -116,7 +116,7 @@ export function AddProjectForm({ clientId }: { clientId: string }) {
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="client_id" value={clientId} />
-      <div className="grid gap-2 sm:grid-cols-[2fr_3fr_auto_auto]">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto_auto]">
         <input name="name" required placeholder="Nom du projet" className="input" />
         <input name="description" placeholder="Description (visible par le client)" className="input" />
         <input name="due_on" type="date" className="input" aria-label="Échéance" />

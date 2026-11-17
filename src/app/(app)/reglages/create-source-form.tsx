@@ -8,7 +8,7 @@ export function CreateSourceForm() {
   const [state, action, pending] = useActionState<CreateSourceState, FormData>(createSaasSource, null);
   return (
     <div className="space-y-3">
-      <form action={action} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+      <form action={action} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
         <input name="name" required placeholder="Nom (ex. Vigie SEO)" className="input" />
         <input name="slug" required placeholder="slug (ex. vigie-seo)" pattern="[a-z0-9-]{2,40}" className="input" />
         <select name="context" defaultValue="saas" className="input">

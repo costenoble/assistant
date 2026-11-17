@@ -11,7 +11,7 @@ export function StartMeetingForm({ workspaces, defaultWorkspace }: { workspaces:
   const projects = workspaces.find((w) => w.id === wsId)?.projects ?? [];
   return (
     <form action={action} className="space-y-3">
-      <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1.4fr_auto]">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto]">
         <label className="space-y-1 text-xs text-muted">
           Espace
           <select name="workspace_id" value={wsId} onChange={(e) => setWsId(e.target.value)} className="input w-full" required>

@@ -6,13 +6,13 @@ import { emailToTask, setPriority, setStatus, snooze } from "@/app/(app)/actions
 import { IconCheck, IconClock, IconFlag, IconPause, IconTask } from "./icons";
 
 /** Actions rapides d'une ligne : discrètes, révélées au survol (toujours visibles au clavier et sur mobile). */
-export function ItemActions({ id, kind, status }: { id: string; kind: ItemKind; status: ItemStatus }) {
+export function ItemActions({ id, kind, status, alwaysVisible }: { id: string; kind: ItemKind; status: ItemStatus; alwaysVisible?: boolean }) {
   const [pending, start] = useTransition();
   const run = (fn: () => Promise<unknown>) => () => start(() => void fn());
   const done = kind === "email" ? "Marquer comme traité" : "Marquer comme fait";
 
   return (
-    <div className={`flex shrink-0 items-center gap-0.5 transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 ${pending ? "opacity-40!" : ""}`}>
+    <div className={`flex shrink-0 items-center gap-0.5 transition ${alwaysVisible ? "" : "md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"} ${pending ? "opacity-40!" : ""}`}>
       {kind === "email" && (
         <button className="icon-btn hidden sm:inline-flex" onClick={run(() => emailToTask(id))} aria-label="Transformer en tâche" title="Transformer en tâche">
           <IconTask />

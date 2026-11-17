@@ -50,6 +50,13 @@
       "when": 1794941730798,
       "tag": "0006_meetings",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794950964358,
+      "tag": "0007_mail_bodies",
+      "breakpoints": true
     }
   ]
 }

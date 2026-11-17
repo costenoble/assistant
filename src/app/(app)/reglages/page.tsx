@@ -107,7 +107,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             ))}
             {!rules.length && <li className="px-3 py-2 text-sm text-muted">Aucune règle.</li>}
           </ul>
-          <form action={addMailRule} className="grid gap-2 sm:grid-cols-[auto_1fr_auto_auto_auto]">
+          <form action={addMailRule} className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto]">
             <select name="match_type" className="input" defaultValue="from_domain">
               <option value="from_domain">Domaine</option>
               <option value="from_address">Adresse</option>

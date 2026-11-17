@@ -57,9 +57,9 @@ export async function notifyOwnerOfClientMessage(
     to: env().OWNER_EMAIL,
     subject: `[#${ticket.number}] ${what} — ${ticket.subject}`,
     paragraphs: [
-      `${who} ${verb}${ctx.project ? ` (projet « ${ctx.project} »)` : ""}${ticket.urgent && kind === "new" ? ", signalée bloquante" : ""} :`,
-      ...(kind === "validated" ? [] : [excerpt(body)]),
+      `${who} ${verb}${ctx.project ? ` (projet « ${ctx.project} »)` : ""}${ticket.urgent && kind === "new" ? ", signalée bloquante" : ""}${kind === "validated" ? "." : " :"}`,
     ],
+    quote: kind === "validated" ? undefined : excerpt(body),
     link: { url: `${env().NEXT_PUBLIC_APP_URL}/tickets/${ticket.id}`, label: isTask(ticket) ? "Ouvrir la tâche" : "Ouvrir le ticket" },
     kind: "ticket-owner",
   });
@@ -109,12 +109,25 @@ export async function notifyClientOfReply(db: Db, ticket: Ticket, body: string, 
       ? "Cette demande est marquée comme résolue. Si ce n'est pas le cas, répondez depuis votre espace client : elle sera rouverte."
       : "Merci de répondre depuis votre espace client plutôt que par email : votre réponse sera suivie plus vite.";
 
+  const intro = task
+    ? opts.isNew
+      ? `Une nouvelle tâche a été ajoutée${ctx.project ? ` au projet « ${ctx.project} »` : ""} : « ${ticket.subject} ».`
+      : ticket.status === "waiting_client"
+        ? `La tâche « ${ticket.subject} » est prête et attend votre validation.`
+        : ticket.status === "resolved"
+          ? `La tâche « ${ticket.subject} » est terminée.`
+          : `Nouveau commentaire sur la tâche « ${ticket.subject} » :`
+    : ticket.status === "resolved"
+      ? `Votre demande n°${ticket.number} est résolue.`
+      : `Nous avons répondu à votre demande n°${ticket.number} :`;
+
   for (const r of recipients) {
     if (!r.email) continue;
     await safeSend({
       to: r.email,
       subject: task && ctx.project ? `[${ctx.project}] ${subject}` : subject,
-      paragraphs: [`Bonjour ${r.name.split(" ")[0]},`, excerpt(body)],
+      paragraphs: [`Bonjour ${r.name.split(" ")[0]},`, intro],
+      quote: body.trim() && body.trim() !== ticket.subject ? excerpt(body) : undefined,
       link: { url, label: task ? "Ouvrir la tâche dans votre espace" : "Voir et répondre dans votre espace client" },
       footer,
       kind: "ticket-client",
