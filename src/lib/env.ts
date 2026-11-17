@@ -69,3 +69,11 @@ export function smtpConfig() {
   const parsed = smtpSchema.safeParse(process.env);
   return parsed.success ? parsed.data : null;
 }
+
+/**
+ * Clé de l'API Claude, ou null si l'IA n'est pas configurée (l'app marche sans).
+ * ANTHROPIC_API_KEY (nom standard) ou API_KEY (nom utilisé dans .env.local).
+ */
+export function anthropicKey(): string | null {
+  return process.env.ANTHROPIC_API_KEY || process.env.API_KEY || null;
+}

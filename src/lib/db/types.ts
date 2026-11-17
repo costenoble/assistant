@@ -7,6 +7,7 @@ import type {
   emailMessages,
   items,
   mailRules,
+  meetings,
   projects,
   sources,
 } from "./schema";
@@ -42,6 +43,7 @@ export type ClientContact = typeof clientContacts.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type ClientNote = typeof clientNotes.$inferSelect;
 export type Ticket = typeof tickets.$inferSelect;
+export type Meeting = typeof meetings.$inferSelect;
 export type TicketMessage = typeof ticketMessages.$inferSelect;
 
 // ─── Tickets (demandes des clients) ─────────────────────────────────
@@ -158,3 +160,23 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   done: "Livré",
   archived: "Archivé",
 };
+
+// ─── Réunions ────────────────────────────────────────────────────────
+
+/** draft = en cours d'enregistrement ou à analyser ; ready = analysée ; failed = analyse en échec. */
+export const MEETING_STATUSES = ["draft", "ready", "failed"] as const;
+export type MeetingStatus = (typeof MEETING_STATUSES)[number];
+
+/** Tâche proposée par Claude à partir d'une réunion, en attente de ta décision. */
+export interface MeetingProposal {
+  title: string;
+  description: string;
+  priority: TaskPriority;
+  /** "owner", un id de contact de l'espace, ou null. */
+  assignee: string | null;
+  project_id: string | null;
+  due_on: string | null;
+  labels: string[];
+  /** Ticket créé à partir de cette proposition (null tant qu'elle n'est pas retenue). */
+  ticket_id: string | null;
+}

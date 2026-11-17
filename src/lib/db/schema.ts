@@ -25,6 +25,7 @@ import {
   RULE_ACTIONS,
   RULE_MATCHES,
   SOURCE_KINDS,
+  MEETING_STATUSES,
   TASK_PRIORITIES,
   TICKET_AUTHORS,
   TICKET_KINDS,
@@ -32,6 +33,7 @@ import {
   WORKSPACE_COLORS,
   WORKSPACE_KINDS,
 } from "./types";
+import type { MeetingProposal } from "./types";
 
 /**
  * Schéma Postgres (Neon). Les clés sont en snake_case, comme les colonnes :
@@ -55,6 +57,7 @@ export const ticketStatus = pgEnum("ticket_status", TICKET_STATUSES);
 export const ticketAuthor = pgEnum("ticket_author", TICKET_AUTHORS);
 export const ticketKind = pgEnum("ticket_kind", TICKET_KINDS);
 export const taskPriority = pgEnum("task_priority", TASK_PRIORITIES);
+export const meetingStatus = pgEnum("meeting_status", MEETING_STATUSES);
 export const workspaceKind = pgEnum("workspace_kind", WORKSPACE_KINDS);
 export const workspaceColor = pgEnum("workspace_color", WORKSPACE_COLORS);
 
@@ -338,4 +341,32 @@ export const verification = pgTable(
     updatedAt: ts("updated_at").notNull().defaultNow(),
   },
   (t) => [index("auth_verification_identifier_idx").on(t.identifier)],
+);
+
+/**
+ * Réunion enregistrée au micro : transcription (lignes « [mm:ss] texte »),
+ * puis analyse par Claude (résumé, décisions, tâches proposées).
+ */
+export const meetings = pgTable(
+  "meetings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Espace de travail concerné. */
+    client_id: uuid("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+    project_id: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    status: meetingStatus("status").notNull().default("draft"),
+    started_at: ts("started_at").notNull().defaultNow(),
+    ended_at: ts("ended_at"),
+    transcript: text("transcript").notNull().default(""),
+    summary: text("summary"),
+    decisions: jsonb("decisions").$type<string[]>().notNull().default([]),
+    proposals: jsonb("proposals").$type<MeetingProposal[]>().notNull().default([]),
+    /** Message d'erreur de la dernière analyse ratée. */
+    error: text("error"),
+    analyzed_at: ts("analyzed_at"),
+    created_at: ts("created_at").notNull().defaultNow(),
+    updated_at: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+  },
+  (t) => [index("meetings_client_idx").on(t.client_id, t.started_at)],
 );
