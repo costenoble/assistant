@@ -16,7 +16,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Mails</h1>
+          <h1 className="page-title">Mails</h1>
           <p className="text-sm text-muted">Triés par priorité, newsletters archivées automatiquement. Répondre depuis ton webmail les marque automatiquement comme traités.</p>
         </div>
         <Link href={showBulk ? "/inbox" : "/inbox?tout=1"} className="btn">

@@ -13,7 +13,7 @@ export default async function NewRequestPage() {
     <div className="space-y-6">
       <Link href="/portail" className="text-sm text-muted hover:text-text">← Retour à votre espace</Link>
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold">Nouvelle demande</h1>
+        <h1 className="page-title">Nouvelle demande</h1>
         <p className="text-sm text-muted">Une question, un problème, une modification à faire ? Nous vous répondons ici, et vous êtes prévenu par email.</p>
       </div>
       <section className="card p-5">

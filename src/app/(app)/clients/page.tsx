@@ -24,7 +24,7 @@ export default async function ClientsPage() {
 
   return (
     <div className="max-w-5xl space-y-6">
-      <h1 className="text-2xl font-semibold">Clients</h1>
+      <h1 className="page-title">Clients</h1>
 
       <section className="card space-y-3 p-5">
         <h2 className="section-title">Nouveau client</h2>

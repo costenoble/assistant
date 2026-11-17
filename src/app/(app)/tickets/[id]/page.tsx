@@ -24,7 +24,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
         <Link href="/tickets" className="text-sm text-muted hover:text-text">← Tickets</Link>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
-            <h1 className="text-2xl font-semibold">
+            <h1 className="page-title">
               <span className="text-muted">#{ticket.number}</span> {ticket.subject}
             </h1>
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">

@@ -36,7 +36,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="max-w-4xl space-y-8">
-      <h1 className="text-2xl font-semibold">Réglages</h1>
+      <h1 className="page-title">Réglages</h1>
 
       {/* ─── Sources ─── */}
       <section className="card divide-y divide-border">

@@ -36,21 +36,24 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Tâches</h1>
+      <h1 className="page-title">Tâches</h1>
       <QuickAdd />
-      <div className="flex flex-wrap items-center gap-2">
-        {STATUS_TABS.map((t) => (
-          <Link key={t.key} href={href({ statut: t.key })} className={t.key === status ? "btn-primary py-1.5" : "btn"}>
-            {t.label}
-          </Link>
-        ))}
-        <span className="mx-1 h-5 w-px bg-border" />
-        <Link href={href({ ctx: undefined })} className={!context ? "btn bg-surface-2" : "btn"}>Tous</Link>
-        {ITEM_CONTEXTS.map((c) => (
-          <Link key={c} href={href({ ctx: c })} className={c === context ? "btn bg-surface-2" : "btn"}>
-            {CONTEXT_LABELS[c]}
-          </Link>
-        ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <nav aria-label="Statut" className="tabs">
+          {STATUS_TABS.map((t) => (
+            <Link key={t.key} href={href({ statut: t.key })} aria-current={t.key === status ? "page" : undefined} className="tab">
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+        <nav aria-label="Contexte" className="tabs">
+          <Link href={href({ ctx: undefined })} aria-current={!context ? "page" : undefined} className="tab">Tous</Link>
+          {ITEM_CONTEXTS.map((c) => (
+            <Link key={c} href={href({ ctx: c })} aria-current={c === context ? "page" : undefined} className="tab">
+              {CONTEXT_LABELS[c]}
+            </Link>
+          ))}
+        </nav>
       </div>
       <section className="card overflow-hidden">
         {items.length ? (

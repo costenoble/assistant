@@ -37,7 +37,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
     <div className="max-w-5xl space-y-6">
       <header className="space-y-1">
         <Link href="/clients" className="text-sm text-muted hover:underline">← Clients</Link>
-        <h1 className="text-2xl font-semibold">{client.name}</h1>
+        <h1 className="page-title">{client.name}</h1>
       </header>
 
       <section className="card space-y-3 p-5">
