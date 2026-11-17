@@ -11,9 +11,13 @@ import { Avatar, WorkspaceDot } from "@/components/workspace/bits";
 import { IconBoard, IconList, IconLock } from "@/components/icons";
 import { AddContactForm, AddProjectForm, DeleteContactButton, PortalAccessToggle, ProjectStatusSelect } from "../../clients/forms";
 import { moveTaskAction } from "../actions";
+import { IdeasPanel } from "@/components/assistant/ideas";
+import { aiAvailable } from "@/lib/ai/claude";
 import { NewTaskPanel, TaskFilters } from "../forms";
 
 export const dynamic = "force-dynamic";
+// Brouillons et idées de Claude : jusqu'à une vingtaine de secondes.
+export const maxDuration = 120;
 
 const VIEWS = [
   { key: "tableau", label: "Tableau" },
@@ -74,6 +78,7 @@ export default async function WorkspacePage({
         </div>
         <div className="flex flex-wrap items-start gap-2">
           <Link href={`/reunions?espace=${workspace.id}`} className="btn">Lancer une réunion</Link>
+          {aiAvailable() && <IdeasPanel workspaceId={workspace.id} projects={options.projects} />}
           {(view === "tableau" || view === "liste") && (
             <NewTaskPanel workspaceId={workspace.id} {...options} defaultProject={sp.projet} />
           )}

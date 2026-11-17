@@ -12,8 +12,12 @@ import { ClientPicker } from "@/components/client-picker";
 import { ItemActions } from "@/components/item-actions";
 import { IconPaperclip, IconReply } from "@/components/icons";
 import { MailFrame } from "./frame";
+import { MailReplyPanel } from "@/components/assistant/mail-reply";
+import { aiAvailable } from "@/lib/ai/claude";
 
 export const dynamic = "force-dynamic";
+// Brouillons et idées de Claude : jusqu'à une vingtaine de secondes.
+export const maxDuration = 120;
 
 const size = (n: number) => (n < 1024 ? `${n} o` : n < 1024 * 1024 ? `${Math.round(n / 1024)} Ko` : `${(n / 1024 / 1024).toFixed(1)} Mo`);
 
@@ -37,9 +41,6 @@ export default async function MailPage({ params }: { params: Promise<{ id: strin
   const subject = email.subject || item.title || "(sans objet)";
   // Contenu complet si on l'a, sinon l'aperçu enregistré à la synchro.
   const content = { html: email.body_html, text: email.body_text ?? email.snippet };
-  const reply = email.from_address
-    ? `mailto:${email.from_address}?subject=${encodeURIComponent(/^re\s*:/i.test(subject) ? subject : `Re: ${subject}`)}`
-    : null;
 
   return (
     <article className="max-w-4xl space-y-5">
@@ -68,8 +69,8 @@ export default async function MailPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {reply && (
-            <a href={reply} className="btn">
+          {email.from_address && (
+            <a href="#repondre" className="btn">
               <IconReply />
               Répondre
             </a>
@@ -108,6 +109,8 @@ export default async function MailPage({ params }: { params: Promise<{ id: strin
           </ul>
         </section>
       )}
+
+      {email.from_address && <MailReplyPanel itemId={item.id} to={email.from_name ?? email.from_address} aiEnabled={aiAvailable()} />}
     </article>
   );
 }

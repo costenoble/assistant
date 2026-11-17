@@ -7,7 +7,8 @@ import { z } from "zod";
 import { requireOwner } from "@/lib/auth/require-owner";
 import { clients, meetings, projects } from "@/lib/db/schema";
 import { TASK_PRIORITIES } from "@/lib/db/types";
-import { AnalysisError, analyzeTranscript } from "@/lib/meetings/analyze";
+import { aiErrorMessage } from "@/lib/ai/claude";
+import { analyzeTranscript } from "@/lib/meetings/analyze";
 import {
   acceptProposals,
   analysisContext,
@@ -59,8 +60,7 @@ export async function analyzeMeetingAction(meetingId: string, transcript: string
     const result = await analyzeTranscript(m.transcript, await analysisContext(db, m));
     await saveAnalysis(db, m.id, result);
   } catch (err) {
-    const message = err instanceof AnalysisError ? err.message : "L'analyse a échoué. Réessaie.";
-    if (!(err instanceof AnalysisError)) console.error("[réunion] analyse", err);
+    const message = aiErrorMessage(err, "analyse de réunion");
     await saveAnalysisError(db, m.id, message);
     revalidatePath(`/reunions/${m.id}`);
     return { error: message };
