@@ -1,10 +1,12 @@
 import { aiAvailable, getWritingStyle } from "@/lib/ai/claude";
 import { WritingStyleForm } from "./style-form";
+import { PushSettings } from "@/components/pwa/push-settings";
+import { listDevices } from "@/lib/notifications/service";
 import { requireOwner } from "@/lib/auth/require-owner";
 import { getSources } from "@/lib/items/queries";
 import { mailRules } from "@/lib/db/schema";
 import { getMicrosoftAccount } from "@/lib/microsoft/oauth";
-import { env, mailAccounts, microsoftConfig } from "@/lib/env";
+import { env, mailAccounts, microsoftConfig, pushConfig } from "@/lib/env";
 import { addMailRule } from "../actions";
 import { CreateSourceForm } from "./create-source-form";
 import { DeleteRuleButton, DisconnectMsButton, SourceControls } from "./source-actions";
@@ -34,12 +36,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     getMicrosoftAccount(db), // jamais les jetons : seulement l'adresse du compte
   ]);
   const accounts = mailAccounts();
-  const style = await getWritingStyle(db);
+  const [style, devices] = await Promise.all([getWritingStyle(db), listDevices(db)]);
   const appUrl = env().NEXT_PUBLIC_APP_URL;
 
   return (
     <div className="max-w-4xl space-y-8">
       <h1 className="page-title">Réglages</h1>
+
+      {/* ─── Notifications ─── */}
+      <section className="card space-y-3 p-5">
+        <h2 className="section-title">Notifications sur tes appareils</h2>
+        <p className="text-sm text-muted">
+          Reçois sur ton téléphone (ou ton ordinateur) les tâches et commentaires de tes clients et les mails urgents. À activer sur chaque appareil.
+        </p>
+        <PushSettings publicKey={pushConfig()?.publicKey ?? null} />
+        {devices.length > 0 && (
+          <p className="text-xs text-muted">
+            Appareils abonnés : {devices.map((d) => d.device ?? "appareil").join(", ")}.
+          </p>
+        )}
+      </section>
 
       {/* ─── Assistant IA ─── */}
       <section className="card space-y-3 p-5">

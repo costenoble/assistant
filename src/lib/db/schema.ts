@@ -376,3 +376,32 @@ export const meetings = pgTable(
   },
   (t) => [index("meetings_client_idx").on(t.client_id, t.started_at)],
 );
+
+/** Notifications de la cloche (ce qui a bougé pendant ton absence). */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** client_task, client_comment, client_validated, client_request, urgent_mail… */
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    body: text("body"),
+    /** Page à ouvrir (chemin interne, ex. /tickets/…). */
+    url: text("url").notNull(),
+    read_at: ts("read_at"),
+    created_at: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("notifications_created_idx").on(t.created_at)],
+);
+
+/** Appareils abonnés aux notifications sur le téléphone ou l'ordinateur (Web Push). */
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  /** Pour reconnaître l'appareil dans les réglages (« iPhone », « Mac »…). */
+  device: text("device"),
+  created_at: ts("created_at").notNull().defaultNow(),
+  last_used_at: ts("last_used_at"),
+});

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d0e10">
+<title>Pas de connexion · Cockpit</title>
+<style>
+  html,body{margin:0;height:100%;background:#0d0e10;color:#e7e9ee;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+  main{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center}
+  img{width:64px;height:64px;border-radius:16px}
+  h1{margin:0;font-size:22px}
+  p{margin:0;color:#9aa1ad;max-width:320px}
+  button{margin-top:8px;background:#6ba1ff;color:#0d0e10;border:0;border-radius:10px;padding:12px 20px;font:600 15px/1 inherit;cursor:pointer}
+</style>
+</head>
+<body>
+<main>
+  <img src="/icon-192.png" alt="">
+  <h1>Pas de connexion</h1>
+  <p>Cockpit a besoin d'Internet pour afficher tes mails et tes tâches. Dès que le réseau revient, tout se recharge.</p>
+  <button onclick="location.reload()">Réessayer</button>
+</main>
+<script>addEventListener("online", () => location.reload());</script>
+</body>
+</html>

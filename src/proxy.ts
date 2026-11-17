@@ -8,7 +8,9 @@ import { getSessionCookie } from "better-auth/cookies";
  * requireOwner() et requireClient() dans chaque page, action et route.
  * Les routes machine (/api/ingest, /api/cron) ont leur propre auth par clé.
  */
-const PUBLIC_PATHS = ["/login", "/api/auth/magic-link", "/api/ingest", "/api/cron"];
+// Fichiers de l'app installable (manifeste, service worker, page hors connexion) : sans données, publics,
+// pour que le téléphone puisse installer Cockpit et afficher la page hors connexion.
+const PUBLIC_PATHS = ["/login", "/api/auth/magic-link", "/api/ingest", "/api/cron", "/sw.js", "/manifest.webmanifest", "/hors-ligne.html"];
 
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
