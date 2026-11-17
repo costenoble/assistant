@@ -34,6 +34,11 @@ export const mailAccountSchema = z.object({
   user: z.string().min(3),
   password: z.string().min(1),
   mailboxes: z.array(z.string()).default(["INBOX"]),
+  /** Envoi des réponses : par défaut le serveur SMTP du même hébergeur (imap.x → smtp.x), port 465. */
+  smtp_host: z.string().optional(),
+  smtp_port: z.number().int().default(465),
+  /** Nom affiché quand tu réponds depuis Cockpit (ex. « Ryan Costenoble »). */
+  from_name: z.string().optional(),
 });
 export type MailAccount = z.infer<typeof mailAccountSchema>;
 

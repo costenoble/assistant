@@ -1,5 +1,6 @@
 "use client";
 
+import { DraftReplyBar } from "@/components/assistant/ticket-tools";
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { TICKET_STATUSES, statusLabel, type TicketKind, type TicketStatus } from "@/lib/db/types";
 import { changeTicketStatus, replyToTicket, type ReplyState } from "./actions";
@@ -8,8 +9,9 @@ import { changeTicketStatus, replyToTicket, type ReplyState } from "./actions";
  * Réponse de l'admin. Demande : Répondre / Répondre et résoudre.
  * Tâche : Commenter / Envoyer en validation / Marquer fait. Note interne dans les deux cas.
  */
-export function ReplyForm({ ticketId, kind, canNotify }: { ticketId: string; kind: TicketKind; canNotify: boolean }) {
+export function ReplyForm({ ticketId, kind, canNotify, aiEnabled = false }: { ticketId: string; kind: TicketKind; canNotify: boolean; aiEnabled?: boolean }) {
   const ref = useRef<HTMLFormElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [internal, setInternal] = useState(false);
   const [state, action, pending] = useActionState<ReplyState, FormData>(replyToTicket, null);
   // Chaque envoi réussi renvoie un nouvel objet : on vide le formulaire.
@@ -24,8 +26,20 @@ export function ReplyForm({ ticketId, kind, canNotify }: { ticketId: string; kin
   return (
     <form ref={ref} action={action} className="space-y-3">
       <input type="hidden" name="ticket_id" value={ticketId} />
+      {aiEnabled && !internal && (
+        <DraftReplyBar
+          ticketId={ticketId}
+          onDraft={(text) => {
+            if (!bodyRef.current) return;
+            bodyRef.current.value = text;
+            bodyRef.current.rows = Math.min(16, Math.max(5, text.split("\n").length + 1));
+            bodyRef.current.focus();
+          }}
+        />
+      )}
       <label htmlFor="reply" className="sr-only">{task ? "Commentaire" : "Réponse"}</label>
       <textarea
+        ref={bodyRef}
         id="reply"
         name="body"
         required

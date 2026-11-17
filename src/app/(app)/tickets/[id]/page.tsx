@@ -8,10 +8,14 @@ import { TicketStatusBadge } from "@/components/ticket-list";
 import { formatDay } from "@/lib/time/paris";
 import { ReplyForm, TicketStatusSelect } from "../forms";
 import { TaskProperties, TaskTextEditor } from "./properties";
+import { SplitTaskPanel } from "@/components/assistant/ticket-tools";
+import { aiAvailable } from "@/lib/ai/claude";
 import { and, asc, eq, ne } from "drizzle-orm";
 import { clientContacts, projects } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
+// Brouillons et idées de Claude : jusqu'à une vingtaine de secondes.
+export const maxDuration = 120;
 
 export default async function TicketPage({ params }: { params: Promise<{ id: string }> }) {
   const parsed = z.uuid().safeParse((await params).id);
@@ -65,7 +69,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
           )}
           <TicketThread messages={messages} viewer="admin" />
           <section className="card p-5">
-            <ReplyForm ticketId={ticket.id} kind={ticket.kind} canNotify={notifiable} />
+            <ReplyForm ticketId={ticket.id} kind={ticket.kind} canNotify={notifiable} aiEnabled={aiAvailable()} />
           </section>
         </div>
         {task && (
@@ -81,6 +85,11 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
               contacts={contacts}
               projects={projectOptions}
             />
+            {aiAvailable() && ticket.status !== "resolved" && ticket.status !== "canceled" && (
+              <div className="mt-5 border-t border-border pt-4">
+                <SplitTaskPanel ticketId={ticket.id} />
+              </div>
+            )}
           </aside>
         )}
       </div>
