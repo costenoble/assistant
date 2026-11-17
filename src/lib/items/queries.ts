@@ -1,8 +1,8 @@
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, ne, or, type SQL } from "drizzle-orm";
+import { getTableColumns, and, asc, desc, eq, gte, inArray, isNull, lt, lte, ne, or, type SQL } from "drizzle-orm";
 import type { Db } from "@/lib/db";
 import { emailMessages, items, sources } from "@/lib/db/schema";
-import type { ItemContext, ItemStatus, ItemWithEmail } from "@/lib/db/types";
+import type { EmailSummary, ItemContext, ItemStatus, ItemWithEmail } from "@/lib/db/types";
 import { parisDayBounds } from "@/lib/time/paris";
 
 const ACTIVE: ItemStatus[] = ["inbox", "todo", "in_progress"];
@@ -11,16 +11,19 @@ const TASK_KINDS = ["task", "followup"] as const;
 const FOCUS_KINDS = [...TASK_KINDS, "ticket"] as const;
 
 /** Items + détail du mail associé (1-1, absent pour les tâches et RDV). */
+// Les listes n'ont besoin que de l'aperçu : le contenu complet n'est lu que sur la page d'un mail.
+const { body_text: _t, body_html: _h, attachments: _a, cc_addresses: _c, ...emailSummary } = getTableColumns(emailMessages);
+
 function withEmail(db: Db, where: SQL | undefined) {
   return db
-    .select({ item: items, email: emailMessages })
+    .select({ item: items, email: emailSummary })
     .from(items)
     .leftJoin(emailMessages, eq(emailMessages.item_id, items.id))
     .where(where)
     .$dynamic();
 }
 
-const flatten = (rows: { item: typeof items.$inferSelect; email: typeof emailMessages.$inferSelect | null }[]) =>
+const flatten = (rows: { item: typeof items.$inferSelect; email: EmailSummary | null }[]) =>
   rows.map((r): ItemWithEmail => ({ ...r.item, email_messages: r.email }));
 
 const notSnoozed = (now: Date) => or(isNull(items.snoozed_until), lte(items.snoozed_until, now));

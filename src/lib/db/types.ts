@@ -123,7 +123,9 @@ export const TICKET_STATUS_LABELS_CLIENT: Record<TicketStatus, string> = {
 /** Ce qu'il faut pour proposer un client dans une liste déroulante. */
 export type ClientOption = { id: string; name: string };
 
-export type ItemWithEmail = Item & { email_messages: EmailMessage | null };
+/** Ce que les listes lisent d'un mail (sans le contenu complet). */
+export type EmailSummary = Omit<EmailMessage, "body_text" | "body_html" | "attachments" | "cc_addresses">;
+export type ItemWithEmail = Item & { email_messages: EmailSummary | null };
 
 export const CONTEXT_LABELS: Record<ItemContext, string> = {
   perso: "Perso",
@@ -179,4 +181,13 @@ export interface MeetingProposal {
   labels: string[];
   /** Ticket créé à partir de cette proposition (null tant qu'elle n'est pas retenue). */
   ticket_id: string | null;
+}
+
+/** Pièce jointe d'un mail (le contenu reste sur le serveur mail, téléchargé à la demande). */
+export interface MailAttachment {
+  /** Position parmi les pièces jointes du message, pour le téléchargement. */
+  index: number;
+  filename: string;
+  contentType: string;
+  size: number;
 }

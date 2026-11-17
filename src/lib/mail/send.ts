@@ -1,15 +1,14 @@
 import "server-only";
 import nodemailer from "nodemailer";
 import { smtpConfig } from "@/lib/env";
-
-const escapeHtml = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+import { renderEmailHtml, senderFrom } from "./template";
 
 function transport() {
   const smtp = smtpConfig();
   if (!smtp) return null;
   return {
-    from: smtp.MAIL_FROM ?? smtp.SMTP_USER,
+    // « Cockpit <adresse> » plutôt que l'adresse seule dans la boîte du destinataire.
+    from: senderFrom(smtp.MAIL_FROM ?? smtp.SMTP_USER, smtp.MAIL_FROM_NAME),
     mailer: nodemailer.createTransport({
       host: smtp.SMTP_HOST,
       port: smtp.SMTP_PORT,
@@ -27,6 +26,8 @@ export interface OutgoingEmail {
   subject: string;
   /** Paragraphes en texte brut ; le HTML est produit à partir d'eux, échappé. */
   paragraphs: string[];
+  /** Message cité, encadré dans le mail (réponse d'un client, commentaire). */
+  quote?: string;
   link?: { url: string; label: string };
   /** Petite ligne grise en bas du mail. */
   footer?: string;
@@ -41,7 +42,7 @@ export interface OutgoingEmail {
  */
 export async function sendEmail(mail: OutgoingEmail) {
   const t = transport();
-  const text = [...mail.paragraphs, ...(mail.link ? [`${mail.link.label} : ${mail.link.url}`] : []), ...(mail.footer ? [mail.footer] : [])].join("\n\n");
+  const text = [...mail.paragraphs, ...(mail.quote ? [mail.quote.split("\n").map((l) => `> ${l}`).join("\n")] : []), ...(mail.link ? [`${mail.link.label} : ${mail.link.url}`] : []), ...(mail.footer ? [mail.footer] : [])].join("\n\n");
   if (!t) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("SMTP non configuré (SMTP_USER / SMTP_PASS) : impossible d'envoyer l'email.");
@@ -49,14 +50,7 @@ export async function sendEmail(mail: OutgoingEmail) {
     console.log(`\n[email] À ${mail.to} — ${mail.subject}\n${text}\n`);
     return;
   }
-  const p = (s: string) => `<p style="white-space:pre-line">${escapeHtml(s)}</p>`;
-  const html = [
-    ...mail.paragraphs.map(p),
-    ...(mail.link
-      ? [`<p><a href="${escapeHtml(mail.link.url)}">${escapeHtml(mail.link.label)}</a></p><p style="color:#666;font-size:13px">Si le lien ne fonctionne pas, copiez cette adresse dans votre navigateur :<br>${escapeHtml(mail.link.url)}</p>`]
-      : []),
-    ...(mail.footer ? [`<p style="color:#666;font-size:13px">${escapeHtml(mail.footer)}</p>`] : []),
-  ].join("");
+  const html = renderEmailHtml(mail, t.from.name);
   await t.mailer.sendMail({
     from: t.from,
     to: mail.to,
