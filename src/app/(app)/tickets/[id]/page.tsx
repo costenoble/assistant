@@ -8,6 +8,8 @@ import { TicketStatusBadge } from "@/components/ticket-list";
 import { formatDay } from "@/lib/time/paris";
 import { ReplyForm, TicketStatusSelect } from "../forms";
 import { TaskProperties, TaskTextEditor } from "./properties";
+import { Breadcrumb } from "@/components/projects/breadcrumb";
+import { projectMilestones } from "@/lib/db/schema";
 import { SplitTaskPanel } from "@/components/assistant/ticket-tools";
 import { aiAvailable } from "@/lib/ai/claude";
 import { and, asc, eq, ne } from "drizzle-orm";
@@ -26,10 +28,13 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
   const { ticket, client, contact, project, messages, notifiable } = detail;
   const task = ticket.kind === "task";
 
-  const workspaceHref = `/espaces/${client.id}${project ? `?projet=${project.id}` : ""}`;
   const contacts = task
     ? await db.select({ id: clientContacts.id, name: clientContacts.full_name }).from(clientContacts).where(eq(clientContacts.client_id, client.id)).orderBy(asc(clientContacts.full_name))
     : [];
+  const milestoneOptions =
+    task && ticket.project_id
+      ? await db.select({ id: projectMilestones.id, name: projectMilestones.name }).from(projectMilestones).where(eq(projectMilestones.project_id, ticket.project_id)).orderBy(asc(projectMilestones.position))
+      : [];
   const projectOptions = task
     ? await db.select({ id: projects.id, name: projects.name }).from(projects).where(and(eq(projects.client_id, client.id), ne(projects.status, "archived")))
     : [];
@@ -38,7 +43,14 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
     <div className="max-w-6xl space-y-6">
       <div className="space-y-3">
         {task ? (
-          <Link href={workspaceHref} className="text-sm text-muted hover:text-text">← {client.name}{project ? ` · ${project.name}` : ""}</Link>
+          <Breadcrumb
+            items={[
+              { label: "Espaces", href: "/espaces" },
+              { label: client.name, href: `/espaces/${client.id}` },
+              ...(project ? [{ label: project.name, href: `/projets/${project.id}` }] : []),
+              { label: `#${ticket.number}` },
+            ]}
+          />
         ) : (
           <Link href="/tickets" className="text-sm text-muted hover:text-text">← Tickets</Link>
         )}
@@ -84,6 +96,8 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
               labels={ticket.labels}
               contacts={contacts}
               projects={projectOptions}
+              milestoneId={ticket.milestone_id}
+              milestones={milestoneOptions}
             />
             {aiAvailable() && ticket.status !== "resolved" && ticket.status !== "canceled" && (
               <div className="mt-5 border-t border-border pt-4">

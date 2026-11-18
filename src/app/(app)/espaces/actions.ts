@@ -12,6 +12,7 @@ import { TASK_PRIORITIES, TICKET_STATUSES, WORKSPACE_COLORS, WORKSPACE_KINDS, ty
 import { notifyAssignee, notifyClientOfReply } from "@/lib/tickets/notify";
 import { createTicket, getTicketRow, moveTask, updateTask, type TaskFields } from "@/lib/tickets/service";
 import { deleteWorkspace } from "@/lib/workspaces/delete";
+import { setTaskMilestone } from "@/lib/projects/service";
 
 export type FormState = { error?: string; message?: string } | null;
 
@@ -163,6 +164,11 @@ export async function updateTaskField(ticketId: string, field: string, value: st
     case "due_on":
       patch = { dueOn: v ? z.iso.date().parse(v) : null };
       break;
+    case "milestone":
+      await setTaskMilestone(db, before.id, v || null);
+      refresh(before.client_id, before.id);
+      if (before.project_id) revalidatePath(`/projets/${before.project_id}`);
+      return;
     case "labels":
       patch = { labels: labelsField.parse(v) };
       break;

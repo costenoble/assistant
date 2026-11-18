@@ -25,6 +25,8 @@ export function TaskProperties({
   labels,
   contacts,
   projects,
+  milestoneId = null,
+  milestones = [],
 }: {
   ticketId: string;
   status: TicketStatus;
@@ -35,6 +37,8 @@ export function TaskProperties({
   labels: string[];
   contacts: Option[];
   projects: Option[];
+  milestoneId?: string | null;
+  milestones?: Option[];
 }) {
   const [pending, start] = useTransition();
   const save = (field: string, value: string) => start(() => updateTaskField(ticketId, field, value));
@@ -68,6 +72,14 @@ export function TaskProperties({
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </Row>
+      {milestones.length > 0 && (
+        <Row label="Jalon">
+          <select aria-label="Jalon" className="input h-8 w-full py-0" defaultValue={milestoneId ?? ""} onChange={(e) => save("milestone", e.target.value)}>
+            <option value="">Aucun</option>
+            {milestones.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </Row>
+      )}
       <Row label="Échéance">
         <input aria-label="Échéance" type="date" className="input h-8 w-full py-0" defaultValue={dueOn ?? ""} onChange={(e) => save("due_on", e.target.value)} />
       </Row>

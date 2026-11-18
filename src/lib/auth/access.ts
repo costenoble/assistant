@@ -72,6 +72,7 @@ const portalTicketColumns = {
   status: tickets.status,
   urgent: tickets.urgent,
   client_id: tickets.client_id,
+  client_name: sql<string>`(select c.name from clients c where c.id = tickets.client_id)`,
   project_id: tickets.project_id,
   project_name: projects.name,
   last_message_at: tickets.last_message_at,
