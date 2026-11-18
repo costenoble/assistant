@@ -9,6 +9,8 @@ import { formatDay } from "@/lib/time/paris";
 import { ReplyForm, TicketStatusSelect } from "../forms";
 import { TaskProperties, TaskTextEditor } from "./properties";
 import { Breadcrumb } from "@/components/projects/breadcrumb";
+import { AttachmentList } from "@/components/files/attachment-list";
+import { listTicketAttachments } from "@/lib/files/service";
 import { projectMilestones } from "@/lib/db/schema";
 import { SplitTaskPanel } from "@/components/assistant/ticket-tools";
 import { aiAvailable } from "@/lib/ai/claude";
@@ -26,6 +28,9 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
   const detail = await getTicketDetail(db, parsed.data);
   if (!detail) notFound();
   const { ticket, client, contact, project, messages, notifiable } = detail;
+  const files = await listTicketAttachments(db, ticket.id, { portal: false });
+  const ticketFiles = files.filter((f) => !f.message_id);
+  const threaded = messages.map((m) => ({ ...m, attachments: files.filter((f) => f.message_id === m.id) }));
   const task = ticket.kind === "task";
 
   const contacts = task
@@ -79,7 +84,13 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
               <TaskTextEditor ticketId={ticket.id} subject={ticket.subject} description={ticket.description} />
             </section>
           )}
-          <TicketThread messages={messages} viewer="admin" />
+          {ticketFiles.length > 0 && (
+            <section aria-label="Pièces jointes de la tâche" className="space-y-2">
+              <h2 className="section-title">Pièces jointes</h2>
+              <AttachmentList items={ticketFiles} />
+            </section>
+          )}
+          <TicketThread messages={threaded} viewer="admin" />
           <section className="card p-5">
             <ReplyForm ticketId={ticket.id} kind={ticket.kind} canNotify={notifiable} aiEnabled={aiAvailable()} />
           </section>

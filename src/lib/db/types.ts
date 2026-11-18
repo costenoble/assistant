@@ -8,6 +8,7 @@ import type {
   items,
   mailRules,
   meetings,
+  attachments,
   projectMilestones,
   projectUpdates,
   notifications,
@@ -50,6 +51,7 @@ export type Meeting = typeof meetings.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type ProjectMilestone = typeof projectMilestones.$inferSelect;
 export type ProjectUpdate = typeof projectUpdates.$inferSelect;
+export type Attachment = typeof attachments.$inferSelect;
 export type TicketMessage = typeof ticketMessages.$inferSelect;
 
 // ─── Tickets (demandes des clients) ─────────────────────────────────
