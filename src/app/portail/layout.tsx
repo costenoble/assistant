@@ -3,7 +3,7 @@ import { requireClient } from "@/lib/auth/require-client";
 import { signOut } from "@/app/login/actions";
 import { LogoMark } from "@/components/icons";
 
-export const metadata = { title: "Espace client" };
+export const metadata = { title: "Espace membre" };
 
 /** Portail client : thème clair, vouvoiement, une seule colonne lisible. */
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
@@ -15,7 +15,7 @@ export default async function PortalLayout({ children }: { children: React.React
           <Link href="/portail" className="flex items-center gap-3">
             <span className="text-accent"><LogoMark /></span>
             <span className="flex flex-col leading-tight">
-              <span className="font-display text-[15px] font-semibold">Espace client</span>
+              <span className="font-display text-[15px] font-semibold">Espace membre</span>
               <span className="text-xs text-muted">{clients.map((c) => c.name).join(" · ")}</span>
             </span>
           </Link>

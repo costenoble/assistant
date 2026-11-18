@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sendPortalInvitation } from "./notify";
 
-describe("invitation à l'espace client", () => {
+describe("invitation à l'espace membre", () => {
   const log = vi.spyOn(console, "log").mockImplementation(() => {});
   afterEach(() => log.mockClear());
 

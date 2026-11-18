@@ -3,7 +3,7 @@ import { LogoMark } from "@/components/icons";
 
 export const metadata = { title: "Connexion · Cockpit" };
 
-const ACCESS_REMOVED = "Votre accès à l'espace client n'est plus actif. Contactez-nous si c'est une erreur.";
+const ACCESS_REMOVED = "Votre accès à l'espace membre n'est plus actif. Contactez-nous si c'est une erreur.";
 // Tout autre code vient de la validation du lien magique (expiré, déjà utilisé, invalide).
 const BAD_LINK = "Ce lien de connexion a expiré ou a déjà servi. Demandez-en un nouveau.";
 

@@ -70,7 +70,7 @@ export function ReplyForm({ ticketId, kind, canNotify, aiEnabled = false }: { ti
         </div>
       </div>
       {!internal && !canNotify && (
-        <p className="text-xs text-muted">Personne côté client n&apos;a accès au portail : personne ne sera prévenu par email.</p>
+        <p className="text-xs text-muted">Aucun membre n&apos;a accès à l&apos;espace membre : personne ne sera prévenu par email.</p>
       )}
       {state?.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
       {state?.message && <p className="text-sm text-muted" role="status">{state.message}</p>}

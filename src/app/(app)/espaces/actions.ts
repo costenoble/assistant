@@ -11,6 +11,7 @@ import { clientContacts, clients, projects } from "@/lib/db/schema";
 import { TASK_PRIORITIES, TICKET_STATUSES, WORKSPACE_COLORS, WORKSPACE_KINDS, type Ticket } from "@/lib/db/types";
 import { notifyAssignee, notifyClientOfReply } from "@/lib/tickets/notify";
 import { createTicket, getTicketRow, moveTask, updateTask, type TaskFields } from "@/lib/tickets/service";
+import { deleteWorkspace } from "@/lib/workspaces/delete";
 
 export type FormState = { error?: string; message?: string } | null;
 
@@ -177,4 +178,27 @@ export async function updateTaskField(ticketId: string, field: string, value: st
   const after = await updateTask(db, before.id, patch);
   if (after) await notifyChange(db, before, after);
   refresh(before.client_id, before.id);
+}
+
+export async function updateWorkspaceAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { db } = await requireOwner();
+  const parsed = z
+    .object({ workspace_id: z.uuid(), name: z.string().trim().min(1, "Donne un nom à l'espace.").max(120), color: z.enum(WORKSPACE_COLORS) })
+    .safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide" };
+  await db.update(clients).set({ name: parsed.data.name, color: parsed.data.color }).where(eq(clients.id, parsed.data.workspace_id));
+  refresh(parsed.data.workspace_id);
+  return { message: "Enregistré." };
+}
+
+/** Suppression définitive : il faut retaper le nom exact de l'espace. */
+export async function deleteWorkspaceAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { db } = await requireOwner();
+  const wsId = id.parse(formData.get("workspace_id"));
+  const [ws] = await db.select({ name: clients.name }).from(clients).where(eq(clients.id, wsId));
+  if (!ws) return { error: "Espace introuvable." };
+  if (String(formData.get("confirm") ?? "").trim() !== ws.name) return { error: `Tape exactement « ${ws.name} » pour confirmer.` };
+  await deleteWorkspace(db, wsId);
+  revalidatePath("/", "layout");
+  redirect("/espaces?supprime=1");
 }
