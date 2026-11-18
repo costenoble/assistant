@@ -7,6 +7,8 @@ import { TASK_PRIORITY_LABELS, statusLabel } from "@/lib/db/types";
 import { DueDate, LabelChip, PriorityIcon } from "@/components/workspace/bits";
 import { assigneeName } from "@/components/workspace/task-card";
 import { Breadcrumb } from "@/components/projects/breadcrumb";
+import { AttachmentList } from "@/components/files/attachment-list";
+import { listTicketAttachments } from "@/lib/files/service";
 import { TicketThread } from "@/components/ticket-thread";
 import { formatDay } from "@/lib/time/paris";
 import { RequestReplyForm, ValidateTaskForm } from "../../forms";
@@ -27,6 +29,9 @@ export default async function RequestPage({
   const ticket = await getPortalTicket(db, clientIds, parsed.data);
   if (!ticket) notFound();
   const justSent = (await searchParams).envoye === "1";
+  const files = await listTicketAttachments(db, ticket.id, { portal: true });
+  const ticketFiles = files.filter((f) => !f.message_id);
+  const threaded = ticket.messages.map((m) => ({ ...m, attachments: files.filter((f) => f.message_id === m.id) }));
   const task = ticket.kind === "task";
 
   return (
@@ -69,7 +74,13 @@ export default async function RequestPage({
           )}
         </section>
       )}
-      <TicketThread messages={ticket.messages} viewer="client" />
+      {ticketFiles.length > 0 && (
+        <section aria-label="Pièces jointes" className="space-y-2">
+          <h2 className="section-title">Pièces jointes</h2>
+          <AttachmentList items={ticketFiles} />
+        </section>
+      )}
+      <TicketThread messages={threaded} viewer="client" />
       {task && ticket.status === "waiting_client" && (
         <section className="card flex flex-wrap items-center justify-between gap-4 border-accent/40 p-5">
           <div className="space-y-1">

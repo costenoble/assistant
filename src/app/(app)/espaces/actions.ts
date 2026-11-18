@@ -13,6 +13,8 @@ import { notifyAssignee, notifyClientOfReply } from "@/lib/tickets/notify";
 import { createTicket, getTicketRow, moveTask, updateTask, type TaskFields } from "@/lib/tickets/service";
 import { deleteWorkspace } from "@/lib/workspaces/delete";
 import { setTaskMilestone } from "@/lib/projects/service";
+import { attachmentIdsFrom } from "@/lib/files/rules";
+import { attachPending } from "@/lib/files/service";
 
 export type FormState = { error?: string; message?: string } | null;
 
@@ -123,6 +125,7 @@ export async function createWorkspaceTask(_prev: FormState, formData: FormData):
     body: description ?? f.subject,
     task: { status: f.status, priority: f.priority, assignee: f.assignee, dueOn: f.due_on, labels: f.labels, description },
   });
+  await attachPending(db, attachmentIdsFrom(formData), { ticketId: ticket.id, clientId: f.workspace_id, messageId: null, uploadedBy: "admin", contactId: null });
   if (ticket.assignee_contact_id) await notifyAssignee(db, ticket);
   else if (f.notify === "on") await notifyClientOfReply(db, ticket, description ?? f.subject, { isNew: true });
   refresh(f.workspace_id);

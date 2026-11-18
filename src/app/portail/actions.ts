@@ -8,6 +8,8 @@ import { requireClient } from "@/lib/auth/require-client";
 import { WORKSPACE_COLORS } from "@/lib/db/types";
 import { createProject } from "@/lib/projects/service";
 import { notify } from "@/lib/notifications/service";
+import { attachmentIdsFrom } from "@/lib/files/rules";
+import { attachPending } from "@/lib/files/service";
 import { notifyOwnerOfClientMessage } from "@/lib/tickets/notify";
 import { addTicketMessage, clientValidateTask, createTicket } from "@/lib/tickets/service";
 
@@ -52,6 +54,7 @@ export async function createRequest(_prev: PortalFormState, formData: FormData):
     body: parsed.data.body,
     urgent: parsed.data.urgent === "on",
   });
+  await attachPending(db, attachmentIdsFrom(formData), { ticketId: ticket.id, clientId: target.clientId, messageId: null, uploadedBy: "client", contactId: contact.id });
   await notifyOwnerOfClientMessage(db, ticket, parsed.data.body, "new", contact.full_name);
   revalidatePath("/portail");
   redirect(`/portail/demandes/${ticket.id}?envoye=1`);
@@ -59,14 +62,18 @@ export async function createRequest(_prev: PortalFormState, formData: FormData):
 
 export async function replyToRequest(_prev: PortalFormState, formData: FormData): Promise<PortalFormState> {
   const { db, contact, clientIds } = await requireClient();
-  const body = z.string().trim().min(1, "Votre message est vide.").max(20_000).safeParse(formData.get("body"));
+  const files = attachmentIdsFrom(formData);
+  const body = z.string().trim().max(20_000).safeParse(formData.get("body") ?? "");
   if (!body.success) return { error: body.error.issues[0]?.message };
+  if (!body.data && !files.length) return { error: "Votre message est vide." };
   const tid = z.uuid().safeParse(formData.get("ticket_id"));
   // Même message qu'un ticket inexistant : on ne révèle pas les demandes des autres clients.
-  if (!tid.success || !(await getPortalTicket(db, clientIds, tid.data))) return { error: "Demande introuvable." };
+  const visible = tid.success ? await getPortalTicket(db, clientIds, tid.data) : null;
+  if (!tid.success || !visible) return { error: "Demande introuvable." };
 
-  const { ticket } = await addTicketMessage(db, tid.data, { author: "client", contactId: contact.id, body: body.data });
-  await notifyOwnerOfClientMessage(db, ticket, body.data, "reply", contact.full_name);
+  const { ticket, message } = await addTicketMessage(db, tid.data, { author: "client", contactId: contact.id, body: body.data });
+  const attached = await attachPending(db, files, { ticketId: ticket.id, clientId: visible.client_id, messageId: message.id, uploadedBy: "client", contactId: contact.id });
+  await notifyOwnerOfClientMessage(db, ticket, body.data || `${attached} pièce(s) jointe(s)`, "reply", contact.full_name);
   revalidatePath(`/portail/demandes/${tid.data}`);
   revalidatePath("/portail", "layout");
   return { sent: Date.now() };
@@ -103,6 +110,7 @@ export async function createTask(_prev: PortalFormState, formData: FormData): Pr
     body,
     urgent: parsed.data.urgent === "on",
   });
+  await attachPending(db, attachmentIdsFrom(formData), { ticketId: ticket.id, clientId: workspaceId, messageId: null, uploadedBy: "client", contactId: contact.id });
   await notifyOwnerOfClientMessage(db, ticket, body, "new", contact.full_name);
   revalidatePath(`/portail/espaces/${workspaceId}`);
   if (visible) revalidatePath(`/portail/projets/${visible.project.id}`);

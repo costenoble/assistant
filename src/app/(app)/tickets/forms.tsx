@@ -1,6 +1,7 @@
 "use client";
 
 import { DraftReplyBar } from "@/components/assistant/ticket-tools";
+import { AttachmentPicker } from "@/components/files/attachment-picker";
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { TICKET_STATUSES, statusLabel, type TicketKind, type TicketStatus } from "@/lib/db/types";
 import { changeTicketStatus, replyToTicket, type ReplyState } from "./actions";
@@ -42,11 +43,11 @@ export function ReplyForm({ ticketId, kind, canNotify, aiEnabled = false }: { ti
         ref={bodyRef}
         id="reply"
         name="body"
-        required
         rows={4}
         placeholder={internal ? "Note pour toi : jamais montrée au client" : task ? "Un commentaire, ou ce que tu as livré…" : "Ta réponse au client…"}
         className={`input w-full resize-y ${internal ? "border-high/50 bg-high/5" : ""}`}
       />
+      <AttachmentPicker target={{ ticketId }} compact />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" name="internal" checked={internal} onChange={(e) => setInternal(e.target.checked)} />

@@ -445,3 +445,31 @@ export const projectUpdates = pgTable(
   },
   (t) => [index("project_updates_project_idx").on(t.project_id, t.created_at)],
 );
+
+/**
+ * Pièces jointes (captures, PDF, documents) d'une tâche ou d'un de ses
+ * messages. Le fichier lui-même est dans le Blob Vercel (privé) ; il n'est
+ * servi que par /fichiers/[id], après contrôle d'accès.
+ */
+export const attachments = pgTable(
+  "attachments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Espace : sert au contrôle d'accès des membres. */
+    client_id: uuid("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+    ticket_id: uuid("ticket_id").references(() => tickets.id, { onDelete: "cascade" }),
+    /** Message du fil ; null = jointe à la tâche elle-même (ou en attente d'un message). */
+    message_id: uuid("message_id").references(() => ticketMessages.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    content_type: text("content_type").notNull(),
+    size: integer("size").notNull(),
+    /** Chemin dans le stockage (jamais montré). */
+    storage_key: text("storage_key").notNull(),
+    uploaded_by: ticketAuthor("uploaded_by").notNull(),
+    contact_id: uuid("contact_id").references(() => clientContacts.id, { onDelete: "set null" }),
+    /** Envoyée mais pas encore rattachée à un message (formulaire pas encore validé). */
+    pending: boolean("pending").notNull().default(true),
+    created_at: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("attachments_ticket_idx").on(t.ticket_id), index("attachments_message_idx").on(t.message_id)],
+);

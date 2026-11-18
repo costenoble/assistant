@@ -1,5 +1,7 @@
 "use server";
 
+import { attachmentIdsFrom } from "@/lib/files/rules";
+import { attachPending } from "@/lib/files/service";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireOwner } from "@/lib/auth/require-owner";
@@ -24,17 +26,21 @@ export async function replyToTicket(_prev: ReplyState, formData: FormData): Prom
   const tid = id.safeParse(formData.get("ticket_id"));
   if (!tid.success) return { error: "Ticket introuvable" };
   const ticketId = tid.data;
-  const body = z.string().trim().min(1, "Message vide").max(20_000).safeParse(formData.get("body"));
+  const files = attachmentIdsFrom(formData);
+  const body = z.string().trim().max(20_000).safeParse(formData.get("body") ?? "");
   if (!body.success) return { error: body.error.issues[0]?.message };
+  if (!body.data && !files.length) return { error: "Message vide" };
   const internal = formData.get("internal") === "on";
   const intent = internal ? null : formData.get("intent");
   // Demande : « reply » (en attente du client) ou « resolve ». Tâche : « comment », « submit » (à valider) ou « resolve ».
   const resolve = intent === "resolve";
   const status = intent === "submit" ? ("waiting_client" as const) : undefined;
 
-  if (!(await getTicketRow(db, ticketId))) return { error: "Ticket introuvable" };
-  const { ticket } = await addTicketMessage(db, ticketId, { author: "admin", body: body.data, internal, resolve, status });
-  if (!internal) await notifyClientOfReply(db, ticket, body.data);
+  const row = await getTicketRow(db, ticketId);
+  if (!row) return { error: "Ticket introuvable" };
+  const { ticket, message } = await addTicketMessage(db, ticketId, { author: "admin", body: body.data, internal, resolve, status });
+  const attached = await attachPending(db, files, { ticketId, clientId: row.client_id, messageId: message.id, uploadedBy: "admin", contactId: null });
+  if (!internal) await notifyClientOfReply(db, ticket, body.data || `${attached} pièce(s) jointe(s) ajoutée(s).`);
 
   refreshTicket(ticketId);
   const task = ticket.kind === "task";

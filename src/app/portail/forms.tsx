@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { AttachmentPicker } from "@/components/files/attachment-picker";
 import { createRequest, createTask, replyToRequest, validateTask, type PortalFormState } from "./actions";
 
 function Error({ state }: { state: PortalFormState }) {
@@ -16,12 +17,14 @@ export function NewRequestForm({
 }) {
   const [state, action, pending] = useActionState<PortalFormState, FormData>(createRequest, null);
   const clientName = (id: string) => clients.find((c) => c.id === id)?.name;
+  // Les captures sont rangées dans l'espace choisi : on attend de le connaître.
+  const [clientId, setClientId] = useState(clients.length === 1 ? clients[0]!.id : "");
   return (
     <form action={action} className="space-y-4">
       {clients.length > 1 && (
         <div className="space-y-1">
           <label htmlFor="client_id" className="text-sm font-medium">Entreprise concernée</label>
-          <select id="client_id" name="client_id" className="input w-full" defaultValue="">
+          <select id="client_id" name="client_id" className="input w-full" value={clientId} onChange={(e) => setClientId(e.target.value)}>
             <option value="">Choisissez…</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -46,6 +49,7 @@ export function NewRequestForm({
         <label htmlFor="body" className="text-sm font-medium">Votre demande</label>
         <textarea id="body" name="body" required rows={7} placeholder="Décrivez ce que vous constatez ou ce que vous souhaitez. Ajoutez l'adresse de la page concernée si besoin." className="input w-full resize-y" />
       </div>
+      {clientId && <AttachmentPicker key={clientId} target={{ workspaceId: clientId }} />}
       <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" name="urgent" className="mt-1" />
         <span>C&apos;est bloquant <span className="text-muted">(votre site ou votre activité est empêché de fonctionner)</span></span>
@@ -81,6 +85,7 @@ export function NewTaskForm({
       </div>
       <label htmlFor="task-body" className="sr-only">Détail</label>
       <textarea id="task-body" name="body" rows={3} placeholder="Détail, contexte, ce que vous attendez exactement (facultatif)" className="input w-full resize-y" />
+      <AttachmentPicker target={{ workspaceId }} compact />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-4">
           {!projectId && projects.length > 0 && (
@@ -130,7 +135,8 @@ export function RequestReplyForm({ ticketId, resolved, task }: { ticketId: strin
           ? resolved ? "Quelque chose ne va pas ? Commentez pour rouvrir la tâche" : "Votre commentaire"
           : resolved ? "Le problème persiste ? Répondez pour rouvrir la demande" : "Votre réponse"}
       </label>
-      <textarea id="reply" name="body" required rows={4} className="input w-full resize-y" />
+      <textarea id="reply" name="body" rows={4} className="input w-full resize-y" />
+      <AttachmentPicker target={{ ticketId }} />
       <Error state={state} />
       <button className="btn-primary" disabled={pending}>{pending ? "Envoi…" : "Envoyer"}</button>
     </form>

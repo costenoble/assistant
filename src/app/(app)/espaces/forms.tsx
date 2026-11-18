@@ -12,6 +12,7 @@ import {
   type WorkspaceColor,
 } from "@/lib/db/types";
 import { WORKSPACE_DOT } from "@/components/workspace/bits";
+import { AttachmentPicker } from "@/components/files/attachment-picker";
 import { createWorkspace, createWorkspaceTask, deleteWorkspaceAction, updateWorkspaceAction, type FormState } from "./actions";
 
 function Feedback({ state }: { state: FormState }) {
@@ -97,6 +98,7 @@ export function NewTaskPanel({
       <input id="nt-subject" name="subject" required autoFocus maxLength={200} placeholder="Titre de la tâche" className="input w-full text-[15px]" />
       <label className="sr-only" htmlFor="nt-desc">Description</label>
       <textarea id="nt-desc" name="description" rows={3} placeholder="Description (facultatif)" className="input w-full resize-y" />
+      <AttachmentPicker target={{ workspaceId }} compact />
       <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Select label="Statut" name="status" defaultValue={defaultStatus}>
           {TICKET_STATUSES.filter((s) => s !== "canceled").map((s) => <option key={s} value={s}>{statusLabel("task", s, "admin")}</option>)}

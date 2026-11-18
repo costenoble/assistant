@@ -71,6 +71,13 @@
       "when": 1794986453415,
       "tag": "0009_projets_visuels",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795020448741,
+      "tag": "0010_pieces_jointes",
+      "breakpoints": true
     }
   ]
 }

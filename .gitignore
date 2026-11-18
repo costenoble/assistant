@@ -6,3 +6,6 @@ node_modules
 next-env.d.ts
 .vercel
 .env*.local
+
+# Fichiers envoyés en local (sans Blob Vercel)
+.data/

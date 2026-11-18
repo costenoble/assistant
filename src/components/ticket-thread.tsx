@@ -1,4 +1,5 @@
 import { formatDay, formatTime } from "@/lib/time/paris";
+import { AttachmentList, type ShownAttachment } from "./files/attachment-list";
 
 export interface ThreadMessage {
   id: string;
@@ -7,6 +8,7 @@ export interface ThreadMessage {
   created_at: Date;
   contact_name: string | null;
   internal?: boolean;
+  attachments?: ShownAttachment[];
 }
 
 /**
@@ -34,7 +36,8 @@ export function TicketThread({ messages, viewer }: { messages: ThreadMessage[]; 
                 {m.internal && <span className="font-semibold text-high"> · note interne</span>}
                 {" · "}{formatDay(m.created_at)} {formatTime(m.created_at)}
               </p>
-              <p className="whitespace-pre-line text-sm">{m.body}</p>
+              {m.body && <p className="whitespace-pre-line text-sm">{m.body}</p>}
+              {m.attachments && m.attachments.length > 0 && <AttachmentList items={m.attachments} tone="bubble" />}
             </div>
           </li>
         );
