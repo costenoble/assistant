@@ -8,9 +8,13 @@ import { PROJECT_STATUS_LABELS } from "@/lib/db/types";
 import { Board } from "@/components/workspace/board";
 import { TaskList } from "@/components/workspace/task-list";
 import { Avatar, WorkspaceDot } from "@/components/workspace/bits";
-import { IconBoard, IconList, IconLock } from "@/components/icons";
-import { AddContactForm, AddProjectForm, DeleteContactButton, PortalAccessToggle, ProjectStatusSelect } from "../../clients/forms";
+import { IconBoard, IconList } from "@/components/icons";
+import { AddContactForm, DeleteContactButton, PortalAccessToggle } from "../../clients/forms";
 import { moveTaskAction } from "../actions";
+import { createProjectAction } from "../../projets/actions";
+import { projectCards } from "@/lib/projects/overview";
+import { ProjectCard } from "@/components/projects/project-card";
+import { NewProjectCard } from "@/components/projects/new-project";
 import { IdeasPanel } from "@/components/assistant/ideas";
 import { aiAvailable } from "@/lib/ai/claude";
 import { DeleteWorkspaceForm, NewTaskPanel, TaskFilters, WorkspaceSettingsForm } from "../forms";
@@ -45,6 +49,7 @@ export default async function WorkspacePage({
   const view: View = VIEWS.find((v) => v.key === sp.vue)?.key ?? "tableau";
   const { workspace, contacts, projects, tasks } = data;
   const members = contacts.filter((c) => c.portal_access);
+  const cards = view === "projets" ? await projectCards(db, workspace.id, { portal: false }) : [];
   const shown = filterTasks(tasks, sp);
   const viewHref = (v: View) => {
     const q = new URLSearchParams(Object.entries(sp).filter(([k, val]) => k !== "vue" && val) as [string, string][]);
@@ -104,26 +109,13 @@ export default async function WorkspacePage({
       {view === "liste" && <TaskList tasks={shown} viewer="admin" basePath="/tickets" />}
 
       {view === "projets" && (
-        <section className="card divide-y divide-border">
-          {projects.map((p) => (
-            <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-              <div className="min-w-0">
-                <Link href={`/espaces/${workspace.id}?projet=${p.id}`} className="flex items-center gap-2 font-medium hover:underline">
-                  {p.status === "draft" && <IconLock className="text-high" />}
-                  {p.name}
-                </Link>
-                {p.description && <p className="text-sm text-muted">{p.description}</p>}
-              </div>
-              <div className="flex items-center gap-3 text-xs text-muted">
-                <span>{tasks.filter((t) => t.project_id === p.id && t.status !== "resolved" && t.status !== "canceled").length} tâche(s) ouverte(s)</span>
-                <ProjectStatusSelect projectId={p.id} clientId={workspace.id} status={p.status} />
-              </div>
-            </div>
-          ))}
-          {!projects.length && <p className="px-4 py-6 text-center text-sm text-muted">Aucun projet. Un projet regroupe des tâches : une app, une refonte, une campagne…</p>}
-          <div className="px-4 py-4"><AddProjectForm clientId={workspace.id} /></div>
-          <p className="px-4 py-3 text-xs text-muted">
-            Un projet en {PROJECT_STATUS_LABELS.draft.toLowerCase()} et ses tâches restent invisibles des membres.
+        <section className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {cards.map((c) => <ProjectCard key={c.id} project={c} href={`/projets/${c.id}`} viewer="admin" />)}
+            <NewProjectCard workspaceId={workspace.id} action={createProjectAction} leads={options.contacts} />
+          </div>
+          <p className="text-xs text-muted">
+            Un projet en {PROJECT_STATUS_LABELS.draft.toLowerCase()} et ses tâches restent invisibles des membres (cadenas sur la carte).
           </p>
         </section>
       )}

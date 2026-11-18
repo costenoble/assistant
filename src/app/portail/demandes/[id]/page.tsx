@@ -6,6 +6,7 @@ import { requireClient } from "@/lib/auth/require-client";
 import { TASK_PRIORITY_LABELS, statusLabel } from "@/lib/db/types";
 import { DueDate, LabelChip, PriorityIcon } from "@/components/workspace/bits";
 import { assigneeName } from "@/components/workspace/task-card";
+import { Breadcrumb } from "@/components/projects/breadcrumb";
 import { TicketThread } from "@/components/ticket-thread";
 import { formatDay } from "@/lib/time/paris";
 import { RequestReplyForm, ValidateTaskForm } from "../../forms";
@@ -31,9 +32,14 @@ export default async function RequestPage({
   return (
     <div className="space-y-6">
       {task ? (
-        <Link href={`/portail/espaces/${ticket.client_id}${ticket.project_id ? `?projet=${ticket.project_id}` : ""}`} className="text-sm text-muted hover:text-text">
-          ← {ticket.project_name ?? "Tableau de l'espace"}
-        </Link>
+        <Breadcrumb
+          items={[
+            { label: "Accueil", href: "/portail" },
+            { label: ticket.client_name, href: `/portail/espaces/${ticket.client_id}` },
+            ...(ticket.project_id && ticket.project_name ? [{ label: ticket.project_name, href: `/portail/projets/${ticket.project_id}` }] : []),
+            { label: `#${ticket.number}` },
+          ]}
+        />
       ) : (
         <Link href="/portail" className="text-sm text-muted hover:text-text">← Retour à votre espace</Link>
       )}

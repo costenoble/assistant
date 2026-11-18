@@ -64,6 +64,13 @@
       "when": 1794954781284,
       "tag": "0008_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794986453415,
+      "tag": "0009_projets_visuels",
+      "breakpoints": true
     }
   ]
 }

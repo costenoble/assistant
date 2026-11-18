@@ -113,3 +113,11 @@ export async function deleteMeetingAction(meetingId: string) {
   revalidatePath("/reunions");
   redirect("/reunions");
 }
+
+/** Partage (ou non) le compte rendu avec les membres : résumé et décisions, jamais la transcription. */
+export async function setMeetingSharedAction(meetingId: string, shared: boolean) {
+  const { db } = await requireOwner();
+  const [m] = await db.update(meetings).set({ shared }).where(eq(meetings.id, id.parse(meetingId))).returning({ client_id: meetings.client_id, project_id: meetings.project_id });
+  revalidatePath(`/reunions/${meetingId}`);
+  if (m?.project_id) revalidatePath(`/projets/${m.project_id}`);
+}

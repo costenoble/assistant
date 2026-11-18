@@ -5,6 +5,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getPortalProject, getPortalTicket, resolvePortalTicketTarget } from "@/lib/auth/access";
 import { requireClient } from "@/lib/auth/require-client";
+import { WORKSPACE_COLORS } from "@/lib/db/types";
+import { createProject } from "@/lib/projects/service";
+import { notify } from "@/lib/notifications/service";
 import { notifyOwnerOfClientMessage } from "@/lib/tickets/notify";
 import { addTicketMessage, clientValidateTask, createTicket } from "@/lib/tickets/service";
 
@@ -119,4 +122,25 @@ export async function validateTask(_prev: PortalFormState, formData: FormData): 
   if (visible.project_id) revalidatePath(`/portail/projets/${visible.project_id}`);
   revalidatePath(`/portail/espaces/${visible.client_id}`);
   return { sent: Date.now() };
+}
+
+/** Un membre crée un projet dans l'un de ses espaces : visible tout de suite, tu es prévenu. */
+export async function createProjectFromPortal(_prev: { error?: string } | null, formData: FormData): Promise<{ error?: string } | null> {
+  const { db, contact, clientIds } = await requireClient();
+  const parsed = z
+    .object({
+      workspace_id: z.uuid(),
+      name: z.string().trim().min(1, "Donnez un nom au projet.").max(120),
+      color: z.enum(WORKSPACE_COLORS).default("blue"),
+      description: z.string().trim().max(2000).optional().transform((v) => v || null),
+      due_on: z.union([z.iso.date(), z.literal("")]).optional().transform((v) => v || null),
+    })
+    .safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide." };
+  const f = parsed.data;
+  if (!clientIds.includes(f.workspace_id)) return { error: "Espace introuvable." };
+  const p = await createProject(db, f.workspace_id, { name: f.name, color: f.color, description: f.description, dueOn: f.due_on }, contact.id);
+  await notify(db, { kind: "client_project", title: `Nouveau projet — ${p.name}`, body: `${contact.full_name} a créé ce projet.`, url: `/projets/${p.id}`, tag: `project-${p.id}` });
+  revalidatePath(`/portail/espaces/${f.workspace_id}`);
+  redirect(`/portail/projets/${p.id}`);
 }

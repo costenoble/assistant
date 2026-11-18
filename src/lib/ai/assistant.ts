@@ -2,7 +2,9 @@ import "server-only";
 import { and, asc, desc, eq, inArray, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/lib/db";
-import { clientContacts, clientNotes, clients, meetings, projects, syncState, ticketMessages, tickets } from "@/lib/db/schema";
+import { clientContacts, clientNotes, clients, meetings, projectUpdates, projects, syncState, ticketMessages, tickets } from "@/lib/db/schema";
+import { PROJECT_HEALTHS } from "@/lib/db/types";
+import { activityFeed, getProjectPage } from "@/lib/projects/overview";
 import type { EmailMessage, Ticket } from "@/lib/db/types";
 import { getTodayData } from "@/lib/items/queries";
 import { formatDay, formatTime, parisParts } from "@/lib/time/paris";
@@ -231,4 +233,50 @@ ${toSort.length ? `\nRéunions dont les tâches proposées n'ont pas été trié
   const key = briefKey(today());
   await db.insert(syncState).values({ key, value: brief }).onConflictDoUpdate({ target: syncState.key, set: { value: brief, updated_at: now } });
   return brief;
+}
+
+// ─── Point d'avancement d'un projet ──────────────────────────────────
+
+export const UpdateSchema = z.object({
+  health: z.enum(PROJECT_HEALTHS).describe("on_track si tout avance comme prévu, at_risk si un retard menace, off_track si l'échéance est déjà compromise"),
+  body: z.string().describe("4 à 8 lignes pour le client : ce qui a été fait, ce qui vient, ce qui bloque ou ce qu'on attend de lui"),
+});
+
+/** Brouillon du point d'avancement, à partir de ce qui a bougé depuis le dernier. */
+export async function draftProjectUpdate(db: Db, projectId: string) {
+  const page = await getProjectPage(db, projectId, { portal: false });
+  if (!page) throw new Error("Projet introuvable");
+  const [style, feed, [last]] = await Promise.all([
+    getWritingStyle(db),
+    activityFeed(db, { workspaceId: page.project.client_id, projectId }, { portal: false, limit: 40 }),
+    db.select().from(projectUpdates).where(eq(projectUpdates.project_id, projectId)).orderBy(desc(projectUpdates.created_at)).limit(1),
+  ]);
+  const since = last?.created_at ?? new Date(Date.now() - 14 * 86_400_000);
+  const recent = feed.filter((e) => e.at > since);
+  const t = today();
+  const open = page.tasks.filter((x) => !["resolved", "canceled"].includes(x.status));
+  const system = `Tu rédiges, au nom d'un développeur freelance, le point d'avancement d'un projet destiné à son client.
+Concret et honnête : ce qui a été livré depuis le dernier point, ce qui arrive, les risques et ce qu'on attend du client. Pas de jargon technique inutile, pas de remplissage.
+${styleBlock(style)}
+${UNTRUSTED_NOTE}`;
+  const prompt = `Date du jour : ${t}
+Projet : ${page.project.name}${page.project.description ? ` — ${page.project.description}` : ""}
+Livraison prévue : ${page.project.due_on ?? "non fixée"}
+Avancement : ${page.progress.done} / ${page.progress.total} tâches faites
+
+Jalons :
+${page.milestones.map((m) => `- ${m.name}${m.due_on ? ` (pour le ${m.due_on})` : ""} : ${m.done}/${m.total}`).join("\n") || "(aucun)"}
+
+<taches>
+Ouvertes :
+${open.map((x) => `- ${x.subject} (${x.status}${x.due_on ? `, échéance ${x.due_on}${x.due_on < t ? " — EN RETARD" : ""}` : ""})`).join("\n") || "(aucune)"}
+</taches>
+
+<fil>
+Depuis le dernier point (${formatDay(since)}) :
+${recent.map((e) => `- ${formatDay(e.at)} : ${e.who ?? "Toi"} ${e.text}`).join("\n") || "(rien de nouveau)"}
+</fil>
+${last ? `\nDernier point (${formatDay(last.created_at)}, ${last.health}) :\n${clip(last.body, 1500)}` : ""}`;
+  const r = await askClaude({ schema: UpdateSchema, system, prompt, effort: "medium" });
+  return { health: r.health, body: r.body.trim() };
 }

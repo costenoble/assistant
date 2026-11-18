@@ -11,6 +11,7 @@ const KIND_LABEL: Record<string, string> = {
   client_new: "Nouveau",
   client_reply: "Commentaire",
   client_validated: "Validé",
+  client_project: "Nouveau projet",
   urgent_mail: "Mail urgent",
   test: "Test",
 };

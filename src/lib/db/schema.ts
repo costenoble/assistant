@@ -14,6 +14,7 @@ import {
   timestamp,
   unique,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import {
   CLIENT_STATUSES,
@@ -26,6 +27,7 @@ import {
   RULE_MATCHES,
   SOURCE_KINDS,
   MEETING_STATUSES,
+  PROJECT_HEALTHS,
   TASK_PRIORITIES,
   TICKET_AUTHORS,
   TICKET_KINDS,
@@ -58,6 +60,7 @@ export const ticketAuthor = pgEnum("ticket_author", TICKET_AUTHORS);
 export const ticketKind = pgEnum("ticket_kind", TICKET_KINDS);
 export const taskPriority = pgEnum("task_priority", TASK_PRIORITIES);
 export const meetingStatus = pgEnum("meeting_status", MEETING_STATUSES);
+export const projectHealth = pgEnum("project_health", PROJECT_HEALTHS);
 export const workspaceKind = pgEnum("workspace_kind", WORKSPACE_KINDS);
 export const workspaceColor = pgEnum("workspace_color", WORKSPACE_COLORS);
 
@@ -104,6 +107,12 @@ export const projects = pgTable(
     status: projectStatus("status").notNull().default("draft"),
     description: text("description"), // partagée avec le client
     due_on: date("due_on"),
+    color: workspaceColor("color").notNull().default("blue"),
+    /** Responsable : toi (lead_is_owner) ou un membre ; personne si les deux sont vides. */
+    lead_is_owner: boolean("lead_is_owner").notNull().default(true),
+    lead_contact_id: uuid("lead_contact_id").references((): AnyPgColumn => clientContacts.id, { onDelete: "set null" }),
+    /** Membre qui a créé le projet depuis son espace (null = créé par toi). */
+    created_by_contact_id: uuid("created_by_contact_id").references((): AnyPgColumn => clientContacts.id, { onDelete: "set null" }),
     created_at: ts("created_at").notNull().defaultNow(),
     updated_at: ts("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
   },
@@ -205,6 +214,8 @@ export const tickets = pgTable(
     labels: text("labels").array().notNull().default(sql`'{}'::text[]`),
     /** Ordre dans une colonne du tableau (plus petit = plus haut). */
     position: doublePrecision("position").notNull().default(0),
+    /** Jalon du projet auquel la tâche contribue. */
+    milestone_id: uuid("milestone_id").references((): AnyPgColumn => projectMilestones.id, { onDelete: "set null" }),
     urgent: boolean("urgent").notNull().default(false), // « bloquant » coché par le client
     last_client_message_at: ts("last_client_message_at"),
     last_message_at: ts("last_message_at").notNull().defaultNow(),
@@ -368,6 +379,8 @@ export const meetings = pgTable(
     summary: text("summary"),
     decisions: jsonb("decisions").$type<string[]>().notNull().default([]),
     proposals: jsonb("proposals").$type<MeetingProposal[]>().notNull().default([]),
+    /** Compte rendu (résumé et décisions) visible des membres de l'espace. La transcription ne l'est jamais. */
+    shared: boolean("shared").notNull().default(false),
     /** Message d'erreur de la dernière analyse ratée. */
     error: text("error"),
     analyzed_at: ts("analyzed_at"),
@@ -405,3 +418,30 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   created_at: ts("created_at").notNull().defaultNow(),
   last_used_at: ts("last_used_at"),
 });
+
+/** Étapes d'un projet (« V1 », « Recette »…), auxquelles on rattache des tâches. */
+export const projectMilestones = pgTable(
+  "project_milestones",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    project_id: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    due_on: date("due_on"),
+    position: doublePrecision("position").notNull().default(0),
+    created_at: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("milestones_project_idx").on(t.project_id)],
+);
+
+/** Points d'avancement d'un projet : santé + quelques lignes, visibles des membres. */
+export const projectUpdates = pgTable(
+  "project_updates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    project_id: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    health: projectHealth("health").notNull(),
+    body: text("body").notNull(),
+    created_at: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("project_updates_project_idx").on(t.project_id, t.created_at)],
+);

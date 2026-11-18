@@ -11,6 +11,7 @@ import { WorkspaceDot } from "@/components/workspace/bits";
 import { Proposals } from "./proposals";
 import { Recorder } from "./recorder";
 import { DeleteMeetingButton, ReanalyzePanel } from "./tools";
+import { MeetingShareToggle } from "../../projets/forms";
 
 export const dynamic = "force-dynamic";
 // L'analyse d'une longue réunion par Claude peut dépasser la minute.
@@ -36,7 +37,10 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
         <Link href="/reunions" className="text-sm text-muted hover:text-text">← Réunions</Link>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h1 className="page-title">{meeting.title}</h1>
-          <DeleteMeetingButton meetingId={meeting.id} />
+          <div className="flex items-center gap-3">
+            {ready && <MeetingShareToggle meetingId={meeting.id} shared={meeting.shared} />}
+            <DeleteMeetingButton meetingId={meeting.id} />
+          </div>
         </div>
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
           {ws && (

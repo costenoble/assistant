@@ -8,6 +8,8 @@ import type {
   items,
   mailRules,
   meetings,
+  projectMilestones,
+  projectUpdates,
   notifications,
   projects,
   sources,
@@ -46,6 +48,8 @@ export type ClientNote = typeof clientNotes.$inferSelect;
 export type Ticket = typeof tickets.$inferSelect;
 export type Meeting = typeof meetings.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+export type ProjectMilestone = typeof projectMilestones.$inferSelect;
+export type ProjectUpdate = typeof projectUpdates.$inferSelect;
 export type TicketMessage = typeof ticketMessages.$inferSelect;
 
 // ─── Tickets (demandes des clients) ─────────────────────────────────
@@ -193,3 +197,13 @@ export interface MailAttachment {
   contentType: string;
   size: number;
 }
+
+// ─── Projets : santé et points d'avancement ──────────────────────────
+
+export const PROJECT_HEALTHS = ["on_track", "at_risk", "off_track"] as const;
+export type ProjectHealth = (typeof PROJECT_HEALTHS)[number];
+export const PROJECT_HEALTH_LABELS: Record<ProjectHealth, string> = {
+  on_track: "En bonne voie",
+  at_risk: "À risque",
+  off_track: "En retard",
+};
