@@ -13,7 +13,8 @@ import { AddContactForm, AddProjectForm, DeleteContactButton, PortalAccessToggle
 import { moveTaskAction } from "../actions";
 import { IdeasPanel } from "@/components/assistant/ideas";
 import { aiAvailable } from "@/lib/ai/claude";
-import { NewTaskPanel, TaskFilters } from "../forms";
+import { DeleteWorkspaceForm, NewTaskPanel, TaskFilters, WorkspaceSettingsForm } from "../forms";
+import { workspaceFootprint } from "@/lib/workspaces/delete";
 
 export const dynamic = "force-dynamic";
 // Brouillons et idées de Claude : jusqu'à une vingtaine de secondes.
@@ -24,6 +25,7 @@ const VIEWS = [
   { key: "liste", label: "Liste" },
   { key: "projets", label: "Projets" },
   { key: "membres", label: "Membres" },
+  { key: "reglages", label: "Réglages" },
 ] as const;
 type View = (typeof VIEWS)[number]["key"];
 
@@ -124,6 +126,19 @@ export default async function WorkspacePage({
             Un projet en {PROJECT_STATUS_LABELS.draft.toLowerCase()} et ses tâches restent invisibles des membres.
           </p>
         </section>
+      )}
+
+      {view === "reglages" && (
+        <div className="max-w-3xl space-y-6">
+          <section className="card space-y-3 p-5">
+            <h2 className="section-title">Espace</h2>
+            <WorkspaceSettingsForm workspaceId={workspace.id} name={workspace.name} color={workspace.color} />
+          </section>
+          <section className="card space-y-3 border-critical/40 p-5">
+            <h2 className="section-title text-critical">Supprimer l&apos;espace</h2>
+            <DeleteWorkspaceForm workspaceId={workspace.id} name={workspace.name} footprint={await workspaceFootprint(db, workspace.id)} />
+          </section>
+        </div>
       )}
 
       {view === "membres" && (

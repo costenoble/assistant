@@ -9,6 +9,9 @@ import { SyncButton } from "@/components/sync-button";
 import { IconLogout, LogoMark } from "@/components/icons";
 import { signOut } from "@/app/login/actions";
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { THEME_COOKIE, parseTheme, themeClass } from "@/lib/theme/theme";
+import { ThemeSwitch } from "@/components/theme-switch";
 import { countUnread } from "@/lib/notifications/service";
 import { Bell } from "@/components/pwa/bell";
 import { MobileTabBar } from "@/components/pwa/mobile-nav";
@@ -29,8 +32,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .from(sources),
   ]);
 
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
   const syncAndLogout = (
-    <div className="space-y-1">
+    <div className="space-y-2">
+      <ThemeSwitch theme={theme} />
       <SyncButton lastSync={sync?.at ? relative(sync.at) : null} failing={!!sync?.failing} />
       <form action={signOut}>
         <button className="btn-ghost w-full justify-start px-3">
@@ -42,7 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   );
 
   return (
-    <div className="theme-dark min-h-dvh bg-bg text-text">
+    <div className={`${themeClass(theme)} min-h-dvh bg-bg text-text`}>
       {/* Téléphone : bandeau du haut (sous l'encoche) ; la navigation est en bas. */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-bg/90 px-4 pb-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] backdrop-blur md:hidden">
         <Link href="/" className="flex items-center gap-2 text-accent">

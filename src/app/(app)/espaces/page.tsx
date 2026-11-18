@@ -6,7 +6,7 @@ import { NewWorkspaceForm } from "./forms";
 
 export const dynamic = "force-dynamic";
 
-export default async function WorkspacesPage() {
+export default async function WorkspacesPage({ searchParams }: { searchParams: Promise<{ supprime?: string }> }) {
   const { db } = await requireOwner();
   const rows = await listWorkspaces(db);
   const groups = [
@@ -20,6 +20,10 @@ export default async function WorkspacesPage() {
         <h1 className="page-title">Espaces de travail</h1>
         <p className="text-sm text-muted">Un tableau partagé par client ou par sujet. Les membres invités y créent des tâches, commentent et valident.</p>
       </div>
+
+      {(await searchParams).supprime === "1" && (
+        <p className="rounded-lg border border-ok/30 bg-ok/10 px-4 py-3 text-sm" role="status">Espace supprimé, avec tout son contenu.</p>
+      )}
 
       <section aria-label="Nouvel espace" className="card p-4">
         <NewWorkspaceForm />

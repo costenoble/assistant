@@ -79,7 +79,7 @@ export function PortalAccessToggle({ contactId, enabled, hasEmail }: { contactId
           {pending ? "…" : enabled ? "Retirer l'accès" : "Inviter"}
         </button>
       </div>
-      {enabled && <p className="text-xs text-ok">A accès à l&apos;espace client</p>}
+      {enabled && <p className="text-xs text-ok">A accès à l&apos;espace membre</p>}
       <Feedback state={state} />
     </div>
   );

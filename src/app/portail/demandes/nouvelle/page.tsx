@@ -4,7 +4,7 @@ import { requireClient } from "@/lib/auth/require-client";
 import { NewRequestForm } from "../../forms";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Nouvelle demande · Espace client" };
+export const metadata = { title: "Nouvelle demande · Espace membre" };
 
 export default async function NewRequestPage() {
   const { db, clients, clientIds } = await requireClient();

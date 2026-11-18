@@ -12,7 +12,7 @@ import {
   type WorkspaceColor,
 } from "@/lib/db/types";
 import { WORKSPACE_DOT } from "@/components/workspace/bits";
-import { createWorkspace, createWorkspaceTask, type FormState } from "./actions";
+import { createWorkspace, createWorkspaceTask, deleteWorkspaceAction, updateWorkspaceAction, type FormState } from "./actions";
 
 function Feedback({ state }: { state: FormState }) {
   if (state?.error) return <p className="text-sm text-danger" role="alert">{state.error}</p>;
@@ -173,5 +173,55 @@ export function TaskFilters({ projects, contacts, labels }: { projects: Option[]
       {filter("Priorité", "priorite", TASK_PRIORITIES.map((p) => ({ value: p, label: TASK_PRIORITY_LABELS[p] })))}
       {labels.length > 0 && filter("Étiquette", "etiquette", labels.map((l) => ({ value: l, label: l })))}
     </div>
+  );
+}
+
+/** Réglages d'un espace : nom et couleur. */
+export function WorkspaceSettingsForm({ workspaceId, name, color }: { workspaceId: string; name: string; color: WorkspaceColor }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(updateWorkspaceAction, null);
+  return (
+    <form action={action} className="space-y-3">
+      <input type="hidden" name="workspace_id" value={workspaceId} />
+      <label className="block space-y-1 text-sm">
+        <span className="block text-xs text-muted">Nom</span>
+        <input name="name" defaultValue={name} required maxLength={120} className="input w-full max-w-md" />
+      </label>
+      <div className="space-y-1">
+        <span className="block text-xs text-muted">Couleur</span>
+        <ColorPicker defaultValue={color} />
+      </div>
+      <div className="flex items-center gap-3">
+        <button className="btn" disabled={pending}>Enregistrer</button>
+        <Feedback state={state} />
+      </div>
+    </form>
+  );
+}
+
+/** Zone dangereuse : supprimer l'espace, après avoir retapé son nom. */
+export function DeleteWorkspaceForm({ workspaceId, name, footprint }: { workspaceId: string; name: string; footprint: { projects: number; tickets: number; meetings: number; contacts: number } }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(deleteWorkspaceAction, null);
+  const [typed, setTyped] = useState("");
+  const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
+  return (
+    <form action={action} className="space-y-3">
+      <input type="hidden" name="workspace_id" value={workspaceId} />
+      <p className="text-sm leading-6">
+        Supprime définitivement l&apos;espace et tout ce qu&apos;il contient :{" "}
+        <strong>
+          {plural(footprint.projects, "projet", "projets")}, {plural(footprint.tickets, "tâche ou demande", "tâches et demandes")} (avec leurs échanges),{" "}
+          {plural(footprint.meetings, "réunion", "réunions")}, {plural(footprint.contacts, "membre", "membres")}
+        </strong>
+        . Les membres perdent leur accès. Les mails reçus restent dans ta boîte. <strong>C&apos;est irréversible.</strong>
+      </p>
+      <label className="block space-y-1 text-sm">
+        <span className="block text-xs text-muted">Pour confirmer, tape « {name} »</span>
+        <input name="confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" className="input w-full max-w-md" />
+      </label>
+      <button className="btn border-critical/50 text-critical hover:bg-critical/10" disabled={pending || typed.trim() !== name}>
+        {pending ? "Suppression…" : "Supprimer l'espace"}
+      </button>
+      <Feedback state={state} />
+    </form>
   );
 }

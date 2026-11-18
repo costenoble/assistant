@@ -43,6 +43,27 @@
   --ok: #4cc38a;
 }
 
+/* « Auto » : suit le réglage clair / sombre de l'appareil. */
+@media (prefers-color-scheme: dark) {
+  .theme-system {
+    color-scheme: dark;
+    --bg: #0d0e10;
+    --surface: #15171a;
+    --surface-2: #1c1f23;
+    --border: #24272c;
+    --border-strong: #33373e;
+    --text: #e8e9eb;
+    --muted: #a9afb7;
+    --accent: #6ba1ff;
+    --accent-ink: #0d0e10;
+    --critical: #ff7566;
+    --high: #f2b84b;
+    --normal: #6ba1ff;
+    --low: #5b626b;
+    --ok: #4cc38a;
+  }
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);

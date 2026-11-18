@@ -115,8 +115,8 @@ export async function notifyClientOfReply(db: Db, ticket: Ticket, body: string, 
       ? "Ouvrez la tâche pour la valider, ou laissez un commentaire si quelque chose ne va pas."
       : undefined
     : ticket.status === "resolved"
-      ? "Cette demande est marquée comme résolue. Si ce n'est pas le cas, répondez depuis votre espace client : elle sera rouverte."
-      : "Merci de répondre depuis votre espace client plutôt que par email : votre réponse sera suivie plus vite.";
+      ? "Cette demande est marquée comme résolue. Si ce n'est pas le cas, répondez depuis votre espace membre : elle sera rouverte."
+      : "Merci de répondre depuis votre espace membre plutôt que par email : votre réponse sera suivie plus vite.";
 
   const intro = task
     ? opts.isNew
@@ -137,14 +137,14 @@ export async function notifyClientOfReply(db: Db, ticket: Ticket, body: string, 
       subject: task && ctx.project ? `[${ctx.project}] ${subject}` : subject,
       paragraphs: [`Bonjour ${r.name.split(" ")[0]},`, intro],
       quote: body.trim() && body.trim() !== ticket.subject ? excerpt(body) : undefined,
-      link: { url, label: task ? "Ouvrir la tâche dans votre espace" : "Voir et répondre dans votre espace client" },
+      link: { url, label: task ? "Ouvrir la tâche dans votre espace" : "Voir et répondre dans votre espace membre" },
       footer,
       kind: "ticket-client",
     });
   }
 }
 
-/** Invitation à l'espace client, envoyée quand l'admin ouvre l'accès d'un contact. */
+/** Invitation à l'espace membre, envoyée quand l'admin ouvre l'accès d'un contact. */
 export async function sendPortalInvitation(contact: { email: string; full_name: string }, clientName: string) {
   await sendEmail({
     to: contact.email,
