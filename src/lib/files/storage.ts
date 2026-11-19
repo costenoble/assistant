@@ -4,12 +4,14 @@ import path from "node:path";
 import { del, get, put } from "@vercel/blob";
 
 /**
- * Stockage des fichiers : Blob Vercel privé quand BLOB_READ_WRITE_TOKEN est là
- * (production), sinon un dossier local `.data/uploads` (développement, tests).
+ * Stockage des fichiers : Blob Vercel privé en production — authentifié soit par
+ * BLOB_READ_WRITE_TOKEN, soit (stockage relié au projet) par BLOB_STORE_ID et le
+ * jeton OIDC de Vercel, que le SDK récupère lui-même. Sinon un dossier local
+ * `.data/uploads` (développement, tests).
  */
 
 const LOCAL_DIR = path.join(process.cwd(), ".data", "uploads");
-const useBlob = () => !!process.env.BLOB_READ_WRITE_TOKEN;
+const useBlob = () => !!(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
 
 export class StorageNotConfigured extends Error {}
 

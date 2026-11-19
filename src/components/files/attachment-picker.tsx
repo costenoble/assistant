@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ALLOWED_TYPES, MAX_FILES_PER_MESSAGE, checkFile, formatSize, isInlineImage } from "@/lib/files/rules";
 import { IconImage, IconPaperclip } from "../icons";
 import { Annotator } from "./annotator";
+import { compressImage } from "./compress";
 
 type Item = {
   key: string;
@@ -36,8 +37,10 @@ export function AttachmentPicker({
   const input = useRef<HTMLInputElement>(null);
 
   const upload = useCallback(
-    async (file: File, replaceKey?: string) => {
+    async (original: File, replaceKey?: string) => {
       const key = replaceKey ?? `${Date.now()}-${Math.random()}`;
+      // Images réduites avant l'envoi (stockage et chargement plus légers).
+      const file = await compressImage(original);
       const problem = checkFile(file);
       const preview = isInlineImage(file.type) ? URL.createObjectURL(file) : null;
       const item: Item = { key, file, preview, status: problem ? "error" : "uploading", error: problem ?? undefined };
