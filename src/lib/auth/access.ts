@@ -169,7 +169,7 @@ export async function getPortalWorkspace(db: Db, clientIds: string[], workspaceI
     db.select({ id: clients.id, name: clients.name, color: clients.color }).from(clients).where(eq(clients.id, workspaceId)),
     getPortalProjects(db, [workspaceId]),
     db
-      .select({ id: clientContacts.id, name: clientContacts.full_name })
+      .select({ id: clientContacts.id, name: clientContacts.full_name, avatar_key: clientContacts.avatar_key })
       .from(clientContacts)
       .where(and(eq(clientContacts.client_id, workspaceId), eq(clientContacts.portal_access, true)))
       .orderBy(asc(clientContacts.full_name)),

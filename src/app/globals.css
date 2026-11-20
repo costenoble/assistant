@@ -138,3 +138,80 @@ body {
   .tab { @apply rounded-md px-3 py-1.5 text-sm text-muted transition hover:text-text; }
   .tab[aria-current="page"] { @apply bg-surface-2 font-medium text-text; }
 }
+
+/* ─── Espace membre : style « pro » (coins arrondis, verre dépoli, ombres douces, animations) ───
+ * Posé sur la racine de l'espace membre uniquement (.skin-member) : l'espace admin ne change pas. */
+.skin-member {
+  --shadow-soft: 0 1px 2px rgb(16 24 40 / 0.04), 0 8px 24px -12px rgb(16 24 40 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(16 24 40 / 0.05), 0 18px 40px -16px rgb(16 24 40 / 0.22);
+  background:
+    radial-gradient(1200px 600px at 100% -10%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, color-mix(in srgb, #9b7bea 10%, transparent), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+}
+.skin-member.theme-dark,
+.skin-member.theme-system {
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.5);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.3), 0 18px 40px -16px rgb(0 0 0 / 0.6);
+}
+.skin-member .card {
+  border-radius: 1.25rem;
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(12px);
+}
+.skin-member a.card,
+.skin-member .card-hover {
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease, border-color 0.2s ease;
+}
+.skin-member a.card:hover,
+.skin-member .card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lift);
+}
+.skin-member .input { border-radius: 0.875rem; background: color-mix(in srgb, var(--surface) 92%, transparent); }
+.skin-member .btn,
+.skin-member .btn-primary { border-radius: 0.875rem; height: 2.5rem; padding-inline: 1.1rem; transition: transform 0.15s ease, filter 0.15s ease, background 0.15s ease; }
+.skin-member .btn-primary { box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--accent) 70%, transparent); }
+.skin-member .btn:active,
+.skin-member .btn-primary:active { transform: scale(0.97); }
+.skin-member .tabs { border-radius: 1rem; background: color-mix(in srgb, var(--surface) 80%, transparent); backdrop-filter: blur(10px); }
+.skin-member .tab { border-radius: 0.75rem; }
+.skin-member .chip { border-radius: 999px; padding-inline: 0.55rem; }
+
+/* Verre dépoli (en-tête, menus) */
+.glass {
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  backdrop-filter: saturate(160%) blur(18px);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+}
+
+/* Animations : apparition en cascade (style="--i: 2" pour décaler), barres qui se remplissent. */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes grow-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.96); }
+  100% { opacity: 1; transform: none; }
+}
+.rise-in { animation: rise-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+.pop-in { animation: pop-in 0.25s ease-out both; }
+.skin-member [role="progressbar"] > div { transform-origin: left; animation: grow-x 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .rise-in, .pop-in, .skin-member [role="progressbar"] > div, [class*="animate-[wave"] { animation: none !important; }
+  .skin-member a.card:hover, .skin-member .card-hover:hover { transform: none; }
+}
+@keyframes wave {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(14deg); }
+  40% { transform: rotate(-8deg); }
+  60% { transform: rotate(14deg); }
+  80% { transform: rotate(-4deg); }
+}

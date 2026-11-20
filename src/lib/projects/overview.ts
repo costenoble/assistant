@@ -4,6 +4,7 @@ import type { Db } from "@/lib/db";
 import { clientContacts, clients, items, meetings, projectMilestones, projectUpdates, projects, ticketMessages, tickets } from "@/lib/db/schema";
 import type { ProjectHealth } from "@/lib/db/types";
 import { selectTasks, type TaskCard } from "@/lib/workspaces/queries";
+import { avatarUrl } from "@/lib/profile/avatar-url";
 
 /**
  * Projets vus comme des objets à part entière : cartes avec avancement,
@@ -116,6 +117,8 @@ export interface ActivityEvent {
   kind: "task_created" | "comment" | "task_done" | "update" | "meeting" | "project_created";
   /** Qui : nom d'un membre, ou null = toi. */
   who: string | null;
+  /** Photo du membre (chemin servi par /avatars), si elle existe. */
+  avatar?: string | null;
   text: string;
   href: { ticketId?: string; projectId?: string; meetingId?: string };
 }
@@ -135,14 +138,14 @@ export async function activityFeed(db: Db, scope: { workspaceId: string; project
 
   const [created, comments, done, updates, meetingRows, newProjects] = await Promise.all([
     db
-      .select({ at: tickets.created_at, id: tickets.id, subject: tickets.subject, who: clientContacts.full_name })
+      .select({ at: tickets.created_at, id: tickets.id, subject: tickets.subject, who: clientContacts.full_name, cid: clientContacts.id, ak: clientContacts.avatar_key })
       .from(tickets)
       .leftJoin(clientContacts, eq(clientContacts.id, tickets.contact_id))
       .where(and(inScope, eq(tickets.kind, "task"), visible))
       .orderBy(desc(tickets.created_at))
       .limit(limit),
     db
-      .select({ at: ticketMessages.created_at, id: tickets.id, subject: tickets.subject, who: clientContacts.full_name, author: ticketMessages.author })
+      .select({ at: ticketMessages.created_at, id: tickets.id, subject: tickets.subject, who: clientContacts.full_name, author: ticketMessages.author, cid: clientContacts.id, ak: clientContacts.avatar_key })
       .from(ticketMessages)
       .innerJoin(tickets, eq(tickets.id, ticketMessages.ticket_id))
       .leftJoin(clientContacts, eq(clientContacts.id, ticketMessages.contact_id))
@@ -178,7 +181,7 @@ export async function activityFeed(db: Db, scope: { workspaceId: string; project
     scope.projectId
       ? Promise.resolve([])
       : db
-          .select({ at: projects.created_at, id: projects.id, name: projects.name, who: clientContacts.full_name })
+          .select({ at: projects.created_at, id: projects.id, name: projects.name, who: clientContacts.full_name, cid: clientContacts.id, ak: clientContacts.avatar_key })
           .from(projects)
           .leftJoin(clientContacts, eq(clientContacts.id, projects.created_by_contact_id))
           .where(projectScope)
@@ -188,12 +191,12 @@ export async function activityFeed(db: Db, scope: { workspaceId: string; project
 
   const HEALTH = { on_track: "en bonne voie", at_risk: "à risque", off_track: "en retard" } as const;
   const events: ActivityEvent[] = [
-    ...created.map((r) => ({ at: r.at, kind: "task_created" as const, who: r.who, text: `a ajouté la tâche « ${r.subject} »`, href: { ticketId: r.id } })),
-    ...comments.map((r) => ({ at: r.at, kind: "comment" as const, who: r.author === "admin" ? null : r.who, text: `a commenté « ${r.subject} »`, href: { ticketId: r.id } })),
+    ...created.map((r) => ({ at: r.at, kind: "task_created" as const, who: r.who, avatar: r.cid ? avatarUrl(r.cid, r.ak) : null, text: `a ajouté la tâche « ${r.subject} »`, href: { ticketId: r.id } })),
+    ...comments.map((r) => ({ at: r.at, kind: "comment" as const, who: r.author === "admin" ? null : r.who, avatar: r.author !== "admin" && r.cid ? avatarUrl(r.cid, r.ak) : null, text: `a commenté « ${r.subject} »`, href: { ticketId: r.id } })),
     ...done.map((r) => ({ at: r.at!, kind: "task_done" as const, who: null, text: `a terminé « ${r.subject} »`, href: { ticketId: r.id } })),
     ...updates.map((r) => ({ at: r.at, kind: "update" as const, who: null, text: `a publié un point d'avancement sur « ${r.project} » : ${HEALTH[r.health]}`, href: { projectId: r.projectId } })),
     ...meetingRows.map((r) => ({ at: r.at, kind: "meeting" as const, who: null, text: `a partagé le compte rendu « ${r.title} »`, href: { meetingId: r.id } })),
-    ...newProjects.map((r) => ({ at: r.at, kind: "project_created" as const, who: r.who, text: `a créé le projet « ${r.name} »`, href: { projectId: r.id } })),
+    ...newProjects.map((r) => ({ at: r.at, kind: "project_created" as const, who: r.who, avatar: r.cid ? avatarUrl(r.cid, r.ak) : null, text: `a créé le projet « ${r.name} »`, href: { projectId: r.id } })),
   ];
   return events.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, limit);
 }

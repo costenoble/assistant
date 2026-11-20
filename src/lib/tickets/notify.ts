@@ -79,7 +79,8 @@ export async function notifyOwnerOfClientMessage(
  * créée par l'admin, tous les contacts du client qui ont accès au portail.
  */
 async function clientRecipients(db: Db, ticket: Ticket) {
-  const withAccess = and(eq(clientContacts.portal_access, true));
+  // Accès ouvert et emails acceptés (« Mon profil »).
+  const withAccess = and(eq(clientContacts.portal_access, true), eq(clientContacts.notify_email, true));
   if (ticket.contact_id) {
     return db
       .select({ email: clientContacts.email, name: clientContacts.full_name })
@@ -164,12 +165,12 @@ export async function notifyAssignee(db: Db, ticket: Ticket) {
   if (!ticket.assignee_contact_id) return;
   const [[contact], ctx] = await Promise.all([
     db
-      .select({ email: clientContacts.email, name: clientContacts.full_name, portal: clientContacts.portal_access })
+      .select({ email: clientContacts.email, name: clientContacts.full_name, portal: clientContacts.portal_access, wants: clientContacts.notify_email })
       .from(clientContacts)
       .where(eq(clientContacts.id, ticket.assignee_contact_id)),
     context(db, ticket),
   ]);
-  if (!contact?.email || !contact.portal) return;
+  if (!contact?.email || !contact.portal || !contact.wants) return;
   await safeSend({
     to: contact.email,
     subject: `${ctx.project ? `[${ctx.project}] ` : ""}Une tâche vous est assignée : ${ticket.subject}`,

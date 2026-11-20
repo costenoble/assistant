@@ -1,5 +1,9 @@
 import { aiAvailable, getWritingStyle } from "@/lib/ai/claude";
 import { WritingStyleForm } from "./style-form";
+import { OwnerNameForm } from "./profile-form";
+import { AvatarUploader } from "@/components/profile/avatar-uploader";
+import { getOwnerProfile } from "@/lib/profile/service";
+import { avatarUrl } from "@/lib/profile/avatar-url";
 import { PushSettings } from "@/components/pwa/push-settings";
 import { listDevices } from "@/lib/notifications/service";
 import { requireOwner } from "@/lib/auth/require-owner";
@@ -36,12 +40,20 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     getMicrosoftAccount(db), // jamais les jetons : seulement l'adresse du compte
   ]);
   const accounts = mailAccounts();
-  const [style, devices] = await Promise.all([getWritingStyle(db), listDevices(db)]);
+  const [style, devices, owner] = await Promise.all([getWritingStyle(db), listDevices(db), getOwnerProfile(db)]);
   const appUrl = env().NEXT_PUBLIC_APP_URL;
 
   return (
     <div className="max-w-4xl space-y-8">
       <h1 className="page-title">Réglages</h1>
+
+      {/* ─── Ton profil ─── */}
+      <section className="card space-y-4 p-5">
+        <h2 className="section-title">Ton profil</h2>
+        <p className="text-sm text-muted">Ta photo et ton nom apparaissent dans l&apos;espace membre, à la place de « Notre équipe ».</p>
+        <AvatarUploader name={owner.name ?? "Moi"} current={avatarUrl("moi", owner.avatar_key)} />
+        <OwnerNameForm name={owner.name} />
+      </section>
 
       {/* ─── Notifications ─── */}
       <section className="card space-y-3 p-5">

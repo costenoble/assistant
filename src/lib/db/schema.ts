@@ -92,6 +92,10 @@ export const clientContacts = pgTable(
     phone: text("phone"),
     job_title: text("job_title"),
     portal_access: boolean("portal_access").notNull().default(false),
+    /** Photo de profil (chemin dans le stockage), choisie par le membre. */
+    avatar_key: text("avatar_key"),
+    /** Le membre reçoit les emails de notification (désactivable dans « Mon profil »). */
+    notify_email: boolean("notify_email").notNull().default(true),
     created_at: ts("created_at").notNull().defaultNow(),
   },
   (t) => [unique().on(t.client_id, t.email), index("client_contacts_email_idx").on(t.email)],

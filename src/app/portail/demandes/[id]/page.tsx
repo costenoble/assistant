@@ -9,6 +9,7 @@ import { assigneeName } from "@/components/workspace/task-card";
 import { Breadcrumb } from "@/components/projects/breadcrumb";
 import { AttachmentList } from "@/components/files/attachment-list";
 import { listTicketAttachments } from "@/lib/files/service";
+import { getOwnerProfile } from "@/lib/profile/service";
 import { TicketThread } from "@/components/ticket-thread";
 import { formatDay } from "@/lib/time/paris";
 import { RequestReplyForm, ValidateTaskForm } from "../../forms";
@@ -80,7 +81,7 @@ export default async function RequestPage({
           <AttachmentList items={ticketFiles} />
         </section>
       )}
-      <TicketThread messages={threaded} viewer="client" />
+      <TicketThread messages={threaded} viewer="client" teamName={(await getOwnerProfile(db)).name ?? "Notre équipe"} />
       {task && ticket.status === "waiting_client" && (
         <section className="card flex flex-wrap items-center justify-between gap-4 border-accent/40 p-5">
           <div className="space-y-1">

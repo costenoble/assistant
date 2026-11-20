@@ -10,6 +10,8 @@ import { Breadcrumb } from "@/components/projects/breadcrumb";
 import { HealthBadge, Progress, shortDay } from "@/components/projects/bits";
 import { MonthCalendar, parseMonth } from "@/components/projects/calendar";
 import { ActivityList } from "@/components/projects/activity";
+import { getOwnerProfile } from "@/lib/profile/service";
+import { avatarUrl } from "@/lib/profile/avatar-url";
 import { Board } from "@/components/workspace/board";
 import { TaskList } from "@/components/workspace/task-list";
 import { TaskCardView } from "@/components/workspace/task-card";
@@ -37,6 +39,8 @@ export default async function PortalProjectPage({ params, searchParams }: { para
   const data = await getProjectPage(db, parsed.data, { portal: true });
   if (!data) notFound();
   const sp = await searchParams;
+  const owner = await getOwnerProfile(db);
+  const team = { name: owner.name ?? "Notre équipe", avatar: avatarUrl("moi", owner.avatar_key) };
   const tab: Tab = TABS.find((t) => t.key === sp.vue)?.key ?? "apercu";
   const { project: p, workspace, milestones, updates, tasks, meetings, progress } = data;
   const feed = tab === "apercu" ? await activityFeed(db, { workspaceId: workspace.id, projectId: p.id }, { portal: true, limit: 12 }) : [];
@@ -133,7 +137,7 @@ export default async function PortalProjectPage({ params, searchParams }: { para
           </div>
           <aside className="min-w-0 space-y-2">
             <h2 className="section-title">Activité</h2>
-            <ActivityList events={feed} viewer="client" empty="Rien encore sur ce projet." />
+            <ActivityList events={feed} viewer="client" team={team} empty="Rien encore sur ce projet." />
           </aside>
         </div>
       )}

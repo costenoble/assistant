@@ -15,14 +15,14 @@ export interface ThreadMessage {
  * Fil d'un ticket. `viewer` décide des libellés : l'admin voit « Toi » et ses
  * notes internes ; le client voit « Vous » (il ne reçoit jamais de note interne).
  */
-export function TicketThread({ messages, viewer }: { messages: ThreadMessage[]; viewer: "admin" | "client" }) {
+export function TicketThread({ messages, viewer, teamName = "Notre équipe" }: { messages: ThreadMessage[]; viewer: "admin" | "client"; teamName?: string }) {
   return (
     <ol className="space-y-3">
       {messages.map((m) => {
         const mine = m.author === viewer;
         const who =
           m.author === "admin"
-            ? viewer === "admin" ? "Toi" : "Notre équipe"
+            ? viewer === "admin" ? "Toi" : teamName
             : viewer === "client" ? "Vous" : (m.contact_name ?? "Client");
         return (
           <li key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>

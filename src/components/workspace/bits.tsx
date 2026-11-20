@@ -45,7 +45,11 @@ export function PriorityIcon({ priority, className = "" }: { priority: TaskPrior
 const AVATAR_TONES = ["bg-[#5b8def]", "bg-[#9b7bea]", "bg-[#3fb27f]", "bg-[#e8954a]", "bg-[#e06c9f]", "bg-[#2fb3b3]"];
 
 /** Initiales sur fond coloré stable (même nom = même couleur). */
-export function Avatar({ name, size = "size-6", owner }: { name: string; size?: string; owner?: boolean }) {
+export function Avatar({ name, size = "size-6", owner, src }: { name: string; size?: string; owner?: boolean; src?: string | null }) {
+  if (src) {
+    // eslint-disable-next-line @next/next/no-img-element -- photo privée servie par Cockpit
+    return <img src={src} alt={name} title={name} className={`inline-block shrink-0 rounded-full object-cover ring-2 ring-surface ${size}`} />;
+  }
   if (owner) {
     // Toi (ou « Notre équipe » côté client) : une silhouette plutôt que des initiales.
     return (
