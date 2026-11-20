@@ -8,6 +8,7 @@ import { requireClient } from "@/lib/auth/require-client";
 import { WORKSPACE_COLORS } from "@/lib/db/types";
 import { createProject } from "@/lib/projects/service";
 import { notify } from "@/lib/notifications/service";
+import { updateMemberProfile } from "@/lib/profile/service";
 import { attachmentIdsFrom } from "@/lib/files/rules";
 import { attachPending } from "@/lib/files/service";
 import { notifyOwnerOfClientMessage } from "@/lib/tickets/notify";
@@ -151,4 +152,22 @@ export async function createProjectFromPortal(_prev: { error?: string } | null, 
   await notify(db, { kind: "client_project", title: `Nouveau projet — ${p.name}`, body: `${contact.full_name} a créé ce projet.`, url: `/projets/${p.id}`, tag: `project-${p.id}` });
   revalidatePath(`/portail/espaces/${f.workspace_id}`);
   redirect(`/portail/projets/${p.id}`);
+}
+
+/** « Mon profil » : nom, fonction, téléphone, emails (sur toutes les fiches de la personne). */
+export async function updateMyProfile(_prev: { error?: string; message?: string } | null, formData: FormData): Promise<{ error?: string; message?: string } | null> {
+  const { db, contact } = await requireClient();
+  const parsed = z
+    .object({
+      full_name: z.string().trim().min(2, "Indiquez votre nom.").max(120),
+      job_title: z.string().trim().max(120).optional().transform((v) => v || null),
+      phone: z.string().trim().max(40).optional().transform((v) => v || null),
+      notify_email: z.literal("on").optional(),
+    })
+    .safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide." };
+  if (!contact.email) return { error: "Adresse email inconnue." };
+  await updateMemberProfile(db, contact.email, { ...parsed.data, notify_email: parsed.data.notify_email === "on" });
+  revalidatePath("/portail", "layout");
+  return { message: "Profil enregistré." };
 }

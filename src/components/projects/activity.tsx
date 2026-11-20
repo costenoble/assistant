@@ -4,7 +4,18 @@ import { relative } from "@/lib/time/paris";
 import { Avatar } from "../workspace/bits";
 
 /** Fil d'activité : qui a fait quoi, avec un lien vers l'élément. */
-export function ActivityList({ events, viewer, empty = "Rien de neuf pour l'instant." }: { events: ActivityEvent[]; viewer: "admin" | "client"; empty?: string }) {
+export function ActivityList({
+  events,
+  viewer,
+  empty = "Rien de neuf pour l'instant.",
+  team,
+}: {
+  events: ActivityEvent[];
+  viewer: "admin" | "client";
+  empty?: string;
+  /** Côté membre : ton nom et ta photo, à la place de « Notre équipe ». */
+  team?: { name: string; avatar: string | null };
+}) {
   if (!events.length) return <p className="card px-4 py-6 text-center text-sm text-muted">{empty}</p>;
   const now = new Date();
   const href = (e: ActivityEvent) =>
@@ -15,7 +26,7 @@ export function ActivityList({ events, viewer, empty = "Rien de neuf pour l'inst
         : e.href.meetingId
           ? viewer === "admin" ? `/reunions/${e.href.meetingId}` : null
           : null;
-  const me = viewer === "admin" ? "Toi" : "Notre équipe";
+  const me = viewer === "admin" ? "Toi" : (team?.name ?? "Notre équipe");
   return (
     <ol className="card divide-y divide-border">
       {events.map((e, i) => {
@@ -23,7 +34,7 @@ export function ActivityList({ events, viewer, empty = "Rien de neuf pour l'inst
         const link = href(e);
         const body = (
           <>
-            <Avatar name={who} size="size-7" owner={!e.who} />
+            <Avatar name={who} size="size-7" owner={!e.who} src={!e.who ? team?.avatar : e.avatar} />
             <span className="min-w-0 flex-1 text-sm leading-5">
               <strong className="font-medium">{who}</strong> <span className="text-muted">{e.text}</span>
             </span>

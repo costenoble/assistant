@@ -11,6 +11,7 @@ import { getMail } from "@/lib/mail/queries";
 import { loadMessageBody } from "@/lib/mail/message-store";
 import { MailSendError, sendMailReply } from "@/lib/mail/reply";
 import { createTicket, getTicketRow } from "@/lib/tickets/service";
+import { setOwnerName } from "@/lib/profile/service";
 
 /** Toutes les actions de l'assistant : réservées à toi, et rien n'est créé ni envoyé sans ton clic. */
 
@@ -163,4 +164,11 @@ export async function saveWritingStyleAction(_prev: { message?: string } | null,
   await setWritingStyle(db, z.string().max(4000).parse(formData.get("style") ?? ""));
   revalidatePath("/reglages");
   return { message: "Enregistré : l'assistant écrira dans ce ton." };
+}
+
+export async function saveOwnerNameAction(_prev: { message?: string } | null, formData: FormData) {
+  const { db } = await requireOwner();
+  await setOwnerName(db, z.string().max(80).parse(formData.get("name") ?? ""));
+  revalidatePath("/", "layout");
+  return { message: "Enregistré : les membres verront ce nom." };
 }

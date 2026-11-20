@@ -11,7 +11,7 @@ export async function notifyMembersOfUpdate(db: Db, project: { id: string; name:
   const members = await db
     .select({ email: clientContacts.email, name: clientContacts.full_name })
     .from(clientContacts)
-    .where(and(eq(clientContacts.client_id, project.client_id), eq(clientContacts.portal_access, true), isNotNull(clientContacts.email)));
+    .where(and(eq(clientContacts.client_id, project.client_id), eq(clientContacts.portal_access, true), eq(clientContacts.notify_email, true), isNotNull(clientContacts.email)));
   let sent = 0;
   for (const m of members) {
     try {

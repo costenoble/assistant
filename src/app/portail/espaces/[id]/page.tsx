@@ -13,6 +13,8 @@ import { Breadcrumb } from "@/components/projects/breadcrumb";
 import { ProjectCard } from "@/components/projects/project-card";
 import { NewProjectCard } from "@/components/projects/new-project";
 import { ActivityList } from "@/components/projects/activity";
+import { getOwnerProfile } from "@/lib/profile/service";
+import { avatarUrl } from "@/lib/profile/avatar-url";
 import { IconBoard, IconList } from "@/components/icons";
 import { createProjectFromPortal } from "../../actions";
 import { NewTaskForm } from "../../forms";
@@ -39,6 +41,8 @@ export default async function PortalWorkspacePage({
   const data = await getPortalWorkspace(db, clientIds, parsed.data);
   if (!data) notFound();
   const sp = await searchParams;
+  const owner = await getOwnerProfile(db);
+  const team = { name: owner.name ?? "Notre équipe", avatar: avatarUrl("moi", owner.avatar_key) };
   const view = sp.vue === "tableau" || sp.vue === "liste" ? sp.vue : "";
   const { workspace, projects, members, tasks } = data;
   const [cards, feed] = view
@@ -64,7 +68,7 @@ export default async function PortalWorkspacePage({
             {workspace.name}
           </h1>
           <span className="flex items-center gap-2 text-sm text-muted">
-            <span className="flex -space-x-1.5">{members.slice(0, 6).map((m) => <Avatar key={m.id} name={m.name} />)}</span>
+            <span className="flex -space-x-1.5">{members.slice(0, 6).map((m) => <Avatar key={m.id} name={m.name} src={avatarUrl(m.id, m.avatar_key)} />)}</span>
             {members.length} membre{members.length > 1 ? "s" : ""}
           </span>
         </div>
@@ -104,8 +108,14 @@ export default async function PortalWorkspacePage({
               <p className="text-xs text-muted">Un projet regroupe les tâches d&apos;un même objectif : une application, une refonte, une campagne…</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {cards.map((c) => <ProjectCard key={c.id} project={c} href={`/portail/projets/${c.id}`} viewer="client" />)}
-              <NewProjectCard workspaceId={workspace.id} action={createProjectFromPortal} />
+              {cards.map((c, i) => (
+                <div key={c.id} className="rise-in grid" style={{ "--i": i } as React.CSSProperties}>
+                  <ProjectCard project={c} href={`/portail/projets/${c.id}`} viewer="client" />
+                </div>
+              ))}
+              <div className="rise-in grid" style={{ "--i": cards.length } as React.CSSProperties}>
+                <NewProjectCard workspaceId={workspace.id} action={createProjectFromPortal} />
+              </div>
             </div>
           </section>
 
@@ -115,7 +125,7 @@ export default async function PortalWorkspacePage({
             </section>
             <section aria-labelledby="activite-h" className="min-w-0 space-y-2">
               <h2 id="activite-h" className="section-title">Activité récente</h2>
-              <ActivityList events={feed} viewer="client" />
+              <ActivityList events={feed} viewer="client" team={team} />
             </section>
           </div>
         </>
